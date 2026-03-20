@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "envelope": ["request_id", "timestamp", "payload"],
+  "payload": ["action", "params"],
+  "actions": ["LAUNCH_APP", "SEARCH", "MEDIA_CONTROL", "VISION_SYNC"],
+  "params": ["app_id", "query", "control", "value"],
+  "media_controls": ["PLAY", "PAUSE", "REWIND_30", "MUTE"]
+}

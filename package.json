@@ -1,0 +1,8 @@
+{
+  "name": "tvclaw",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "server-brain",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./engine": "./dist/engine.js",
+    "./tools/tv_control": "./dist/tools/tv_control.js",
+    "./tools/vision": "./dist/tools/vision.js",
+    "./nanoclaw": "./dist/nanoclaw.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@tvclaw/protocol": "file:../../packages/protocol",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
