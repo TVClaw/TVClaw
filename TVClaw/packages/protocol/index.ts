@@ -2,7 +2,8 @@ export type ProtocolAction =
   | "LAUNCH_APP"
   | "SEARCH"
   | "MEDIA_CONTROL"
-  | "VISION_SYNC";
+  | "VISION_SYNC"
+  | "SHOW_TOAST";
 
 export type MediaControl =
   | "PLAY"
@@ -15,6 +16,7 @@ export interface ProtocolParams {
   query?: string;
   control?: MediaControl;
   value?: string | number;
+  message?: string;
 }
 
 export interface ProtocolPayload {

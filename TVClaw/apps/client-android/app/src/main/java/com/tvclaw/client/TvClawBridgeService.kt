@@ -8,7 +8,9 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -25,6 +27,9 @@ class TvClawBridgeService : Service() {
     private val client = OkHttpClient()
     private val socketRef = AtomicReference<WebSocket?>(null)
     private val scheduler = Executors.newSingleThreadScheduledExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var connectTimeoutRunnable: Runnable? = null
+    private var connectFeedbackGeneration = 0
     private var reconnect: ScheduledFuture<*>? = null
     private var url: String = BuildConfig.TV_BRAIN_WS_URL
 
@@ -52,6 +57,8 @@ class TvClawBridgeService : Service() {
             }
         }
         url = intent?.getStringExtra(EXTRA_WS_URL) ?: BuildConfig.TV_BRAIN_WS_URL
+        val reportConnect =
+            intent?.getBooleanExtra(EXTRA_REPORT_CONNECT_RESULT, false) == true
         val n = buildNotification(getString(R.string.notification_bridge_running))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -62,7 +69,7 @@ class TvClawBridgeService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, n)
         }
-        connectNow()
+        connectNow(reportConnect)
         return START_STICKY
     }
 
@@ -90,19 +97,56 @@ class TvClawBridgeService : Service() {
             .build()
     }
 
-    private fun connectNow() {
+    private fun connectNow(reportConnectResult: Boolean = false) {
         reconnect?.cancel(false)
         reconnect = null
         disconnect()
+        val feedbackGen =
+            if (reportConnectResult) {
+                ++connectFeedbackGeneration
+            } else {
+                -1
+            }
+        connectTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        connectTimeoutRunnable = null
+        if (reportConnectResult) {
+            val runnable = Runnable {
+                if (feedbackGen == connectFeedbackGeneration) {
+                    emitConnectResult(false, getString(R.string.bridge_connect_timeout))
+                }
+            }
+            connectTimeoutRunnable = runnable
+            mainHandler.postDelayed(runnable, CONNECT_FEEDBACK_TIMEOUT_MS)
+        }
         val req = Request.Builder().url(url).build()
         val ws = client.newWebSocket(req, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                mainHandler.post {
+                    if (feedbackGen != -1 && feedbackGen == connectFeedbackGeneration) {
+                        connectTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+                        connectTimeoutRunnable = null
+                        emitConnectResult(true, null)
+                    }
+                }
+            }
+
             override fun onMessage(webSocket: WebSocket, text: String) {
                 TvClawAccessibilityService.postEnvelopeJson(text)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                socketRef.compareAndSet(webSocket, null)
-                scheduleReconnect()
+                mainHandler.post {
+                    socketRef.compareAndSet(webSocket, null)
+                    if (feedbackGen != -1 && feedbackGen == connectFeedbackGeneration) {
+                        connectTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+                        connectTimeoutRunnable = null
+                        val detail =
+                            t.message?.takeIf { it.isNotBlank() }
+                                ?: t.javaClass.simpleName
+                        emitConnectResult(false, detail)
+                    }
+                    scheduleReconnect()
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -113,11 +157,22 @@ class TvClawBridgeService : Service() {
         socketRef.set(ws)
     }
 
+    private fun emitConnectResult(ok: Boolean, message: String?) {
+        sendBroadcast(
+            Intent(ACTION_BRIDGE_STATUS).setPackage(packageName).apply {
+                putExtra(EXTRA_BRIDGE_OK, ok)
+                if (message != null) {
+                    putExtra(EXTRA_BRIDGE_MESSAGE, message)
+                }
+            },
+        )
+    }
+
     private fun scheduleReconnect() {
         if (reconnect != null) return
-        reconnect = scheduler.schedule({ 
+        reconnect = scheduler.schedule({
             reconnect = null
-            connectNow() 
+            connectNow(false)
         }, 3, TimeUnit.SECONDS)
     }
 
@@ -128,8 +183,13 @@ class TvClawBridgeService : Service() {
     companion object {
         const val ACTION_START = "com.tvclaw.client.action.START_BRIDGE"
         const val ACTION_STOP = "com.tvclaw.client.action.STOP_BRIDGE"
+        const val ACTION_BRIDGE_STATUS = "com.tvclaw.client.action.BRIDGE_STATUS"
         const val EXTRA_WS_URL = "ws_url"
+        const val EXTRA_REPORT_CONNECT_RESULT = "report_connect_result"
+        const val EXTRA_BRIDGE_OK = "bridge_ok"
+        const val EXTRA_BRIDGE_MESSAGE = "bridge_message"
         private const val CHANNEL_ID = "tvclaw_bridge"
         private const val NOTIFICATION_ID = 42
+        private const val CONNECT_FEEDBACK_TIMEOUT_MS = 8_000L
     }
 }

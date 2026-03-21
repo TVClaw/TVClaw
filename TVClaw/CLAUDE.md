@@ -87,11 +87,13 @@ Use these three scenarios to verify the "vibe" is working:
 * **NanoClaw Integration:** Use [NanoClaw](https://github.com/qwibitai/nanoclaw) alongside or merged with `server-brain`. Import TV sends from `server-brain` subpath `nanoclaw` (`createTvCommandSink`, `sendToAllTvs`, `visionSyncCommand`). Do not over-engineer the agent loop.
 * **Vibe Coding Goal:** Focus on **Human-in-the-loop** safety. The Brain should always confirm high-impact actions (like "Buy this movie") before executing.
 
-## 6. Development Workflow
+## 6. Development Workflow (WiFi only; no USB)
 
-1. Start `server-brain` (TypeScript).
-2. Sideload `client-android` (Debug APK) to Nvidia Shield/Chromecast.
-3. Pair via local IP over WebSockets.
+1. Build the Android client from `apps/client-android` (`./gradlew :app:assembleDebug`).
+2. Start `server-brain`. On the TV, open a browser to `http://<brain-lan-ip>:8770/` and install via the APK link (or open `/tvclaw-client.apk` directly). Allow the browser to install unknown apps if the TV asks. Override the file with env `TVCLAW_CLIENT_APK` if the APK lives elsewhere.
+3. Optional: on Android 11+ TVs use **Developer options → Wireless debugging**, then `adb pair` and `adb connect <ip>:<port>` on your laptop on the same WiFi so you can run `adb install -r` without cables.
+4. Open the TVClaw app on the TV, start the bridge; `tvclaw.brain.ws.url` must be `ws://<brain-lan-ip>:8765` (via `local.properties` at build time).
+5. Enable TVClaw under **Settings → Accessibility** on the TV.
 
 ```
 

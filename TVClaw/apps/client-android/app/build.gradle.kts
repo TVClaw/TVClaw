@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+val localProperties = Properties()
+rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use {
+    localProperties.load(it)
+}
+val tvBrainWsUrl =
+    localProperties.getProperty("tvclaw.brain.ws.url")?.trim()?.takeIf { it.isNotEmpty() }
+        ?: "ws://10.0.2.2:8765"
 
 android {
     namespace = "com.tvclaw.client"
@@ -11,9 +21,9 @@ android {
         applicationId = "com.tvclaw.client"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.0.1"
-        buildConfigField("String", "TV_BRAIN_WS_URL", "\"ws://10.0.2.2:8765\"")
+        versionCode = 8
+        versionName = "0.0.8"
+        buildConfigField("String", "TV_BRAIN_WS_URL", "\"$tvBrainWsUrl\"")
     }
 
     buildTypes {
@@ -34,7 +44,16 @@ android {
     }
 }
 
+tasks.register("printAppVersion") {
+    doLast {
+        println(
+            "TVClaw built: debug-${android.defaultConfig.versionName} (versionCode ${android.defaultConfig.versionCode})",
+        )
+    }
+}
+
 dependencies {
+    implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
