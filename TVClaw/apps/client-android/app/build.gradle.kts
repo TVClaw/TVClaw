@@ -9,9 +9,11 @@ val localProperties = Properties()
 rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use {
     localProperties.load(it)
 }
-val tvBrainWsUrl =
-    localProperties.getProperty("tvclaw.brain.ws.url")?.trim()?.takeIf { it.isNotEmpty() }
-        ?: "ws://10.0.2.2:8765"
+val tvClawWsListenPort =
+    localProperties.getProperty("tvclaw.ws.listen.port")?.trim()?.toIntOrNull() ?: 8765
+
+val tvClawBrainHttpUrl =
+    localProperties.getProperty("tvclaw.brain.http.url")?.trim()?.takeIf { it.isNotEmpty() } ?: ""
 
 android {
     namespace = "com.tvclaw.client"
@@ -21,9 +23,14 @@ android {
         applicationId = "com.tvclaw.client"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.0.8"
-        buildConfigField("String", "TV_BRAIN_WS_URL", "\"$tvBrainWsUrl\"")
+        versionCode = 13
+        versionName = "0.0.13"
+        buildConfigField("int", "TVCLAW_WS_LISTEN_PORT", "$tvClawWsListenPort")
+        buildConfigField(
+            "String",
+            "TVCLAW_BRAIN_HTTP_URL",
+            "\"${tvClawBrainHttpUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
+        )
     }
 
     buildTypes {
@@ -59,4 +66,5 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.java-websocket:Java-WebSocket:1.5.7")
 }

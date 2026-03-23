@@ -9,7 +9,9 @@ export type MediaControl =
   | "PLAY"
   | "PAUSE"
   | "REWIND_30"
-  | "MUTE";
+  | "MUTE"
+  | "HOME"
+  | "BACK";
 
 export interface ProtocolParams {
   app_id?: string;

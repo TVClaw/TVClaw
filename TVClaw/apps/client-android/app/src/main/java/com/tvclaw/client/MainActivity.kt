@@ -48,7 +48,8 @@ class MainActivity : AppCompatActivity() {
             val msg = intent.getStringExtra(TvClawBridgeService.EXTRA_BRIDGE_MESSAGE)
             val text =
                 if (ok) {
-                    getString(R.string.bridge_connect_ok)
+                    msg?.takeIf { it.isNotBlank() }
+                        ?: getString(R.string.bridge_connect_ok)
                 } else {
                     getString(R.string.bridge_connect_failed, msg ?: "")
                 }
@@ -78,7 +79,6 @@ class MainActivity : AppCompatActivity() {
                 this,
                 Intent(this, TvClawBridgeService::class.java).apply {
                     action = TvClawBridgeService.ACTION_START
-                    putExtra(TvClawBridgeService.EXTRA_WS_URL, BuildConfig.TV_BRAIN_WS_URL)
                     putExtra(TvClawBridgeService.EXTRA_REPORT_CONNECT_RESULT, true)
                 }
             )
@@ -91,6 +91,15 @@ class MainActivity : AppCompatActivity() {
             )
         }
         binding.updateApp.setOnClickListener {
+            val base = BuildConfig.TVCLAW_BRAIN_HTTP_URL.trim()
+            if (base.isEmpty()) {
+                Toast.makeText(
+                    this,
+                    R.string.update_app_need_http_url,
+                    Toast.LENGTH_LONG,
+                ).show()
+                return@setOnClickListener
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                 !packageManager.canRequestPackageInstalls()
             ) {
@@ -119,7 +128,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.update_app_downloading), Toast.LENGTH_SHORT).show()
             thread {
                 try {
-                    val apkUrl = brainHttpApkUrl(BuildConfig.TV_BRAIN_WS_URL)
+                    val apkUrl = brainHttpApkUrlFromBase(base)
                     val out = File(cacheDir, "tvclaw-update.apk")
                     downloadToFile(apkUrl, out)
                     val uri = FileProvider.getUriForFile(
@@ -159,24 +168,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun brainHttpApkUrl(wsUrl: String): String {
-        val u = Uri.parse(wsUrl)
+    private fun brainHttpApkUrlFromBase(httpBase: String): String {
+        val u = Uri.parse(httpBase)
         val host = u.host ?: throw IllegalArgumentException("missing host")
-        val scheme =
-            when (u.scheme?.lowercase()) {
-                "wss" -> "https"
-                "ws" -> "http"
-                else -> throw IllegalArgumentException("expected ws or wss")
-            }
-        val wsPort = u.port.takeIf { it != -1 } ?: 8765
-        val httpPort = if (wsPort == 8765) 8770 else wsPort
+        val scheme = u.scheme?.lowercase() ?: "http"
+        if (scheme != "http" && scheme != "https") {
+            throw IllegalArgumentException("expected http or https")
+        }
+        val port = u.port.takeIf { it != -1 }
         val hostPort =
-            if ((scheme == "http" && httpPort == 80) ||
-                (scheme == "https" && httpPort == 443)
+            if (port == null ||
+                (scheme == "http" && port == 80) ||
+                (scheme == "https" && port == 443)
             ) {
                 host
             } else {
-                "$host:$httpPort"
+                "$host:$port"
             }
         return "$scheme://$hostPort/tvclaw-client.apk"
     }

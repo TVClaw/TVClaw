@@ -5,33 +5,27 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
+import java.net.InetSocketAddress
+import org.java_websocket.WebSocket
+import org.java_websocket.handshake.ClientHandshake
+import org.java_websocket.server.WebSocketServer
 
 class TvClawBridgeService : Service() {
 
-    private val client = OkHttpClient()
-    private val socketRef = AtomicReference<WebSocket?>(null)
-    private val scheduler = Executors.newSingleThreadScheduledExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var connectTimeoutRunnable: Runnable? = null
-    private var connectFeedbackGeneration = 0
-    private var reconnect: ScheduledFuture<*>? = null
-    private var url: String = BuildConfig.TV_BRAIN_WS_URL
+    private var commandServer: WebSocketServer? = null
+    private var nsdManager: NsdManager? = null
+    private var nsdRegistrationListener: NsdManager.RegistrationListener? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -41,7 +35,7 @@ class TvClawBridgeService : Service() {
             val ch = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_LOW,
             )
             (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
         }
@@ -50,34 +44,30 @@ class TvClawBridgeService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                disconnect()
+                stopCommandServerAndNsd()
                 stopForeground(Service.STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
             }
         }
-        url = intent?.getStringExtra(EXTRA_WS_URL) ?: BuildConfig.TV_BRAIN_WS_URL
-        val reportConnect =
-            intent?.getBooleanExtra(EXTRA_REPORT_CONNECT_RESULT, false) == true
         val n = buildNotification(getString(R.string.notification_bridge_running))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
                 n,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
             )
         } else {
             startForeground(NOTIFICATION_ID, n)
         }
-        connectNow(reportConnect)
+        val reportConnect =
+            intent?.getBooleanExtra(EXTRA_REPORT_CONNECT_RESULT, false) == true
+        startServerAndNsd(reportConnect)
         return START_STICKY
     }
 
     override fun onDestroy() {
-        reconnect?.cancel(false)
-        reconnect = null
-        disconnect()
-        scheduler.shutdownNow()
+        stopCommandServerAndNsd()
         super.onDestroy()
     }
 
@@ -86,7 +76,7 @@ class TvClawBridgeService : Service() {
             this,
             0,
             Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -97,64 +87,141 @@ class TvClawBridgeService : Service() {
             .build()
     }
 
-    private fun connectNow(reportConnectResult: Boolean = false) {
-        reconnect?.cancel(false)
-        reconnect = null
-        disconnect()
-        val feedbackGen =
-            if (reportConnectResult) {
-                ++connectFeedbackGeneration
-            } else {
-                -1
-            }
-        connectTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-        connectTimeoutRunnable = null
-        if (reportConnectResult) {
-            val runnable = Runnable {
-                if (feedbackGen == connectFeedbackGeneration) {
-                    emitConnectResult(false, getString(R.string.bridge_connect_timeout))
+    private fun startServerAndNsd(reportConnectResult: Boolean) {
+        stopCommandServerAndNsd()
+        val listenPort = BuildConfig.TVCLAW_WS_LISTEN_PORT
+        val bindPort = if (listenPort > 0) listenPort else 0
+        val srv =
+            object : WebSocketServer(InetSocketAddress("0.0.0.0", bindPort)) {
+                override fun onStart() {
+                    val p = port
+                    mainHandler.post {
+                        registerNsd(p, reportConnectResult)
+                    }
                 }
+
+                override fun onOpen(conn: WebSocket?, handshake: ClientHandshake?) {}
+
+                override fun onClose(
+                    conn: WebSocket?,
+                    code: Int,
+                    reason: String?,
+                    remote: Boolean,
+                ) {
+                }
+
+                override fun onMessage(conn: WebSocket?, message: String?) {
+                    if (message != null) {
+                        TvClawAccessibilityService.postEnvelopeJson(message)
+                    }
+                }
+
+                override fun onError(conn: WebSocket?, ex: Exception?) {}
             }
-            connectTimeoutRunnable = runnable
-            mainHandler.postDelayed(runnable, CONNECT_FEEDBACK_TIMEOUT_MS)
+        commandServer = srv
+        Thread(
+            {
+                try {
+                    srv.start()
+                } catch (e: Exception) {
+                    mainHandler.post {
+                        if (reportConnectResult) {
+                            emitConnectResult(
+                                false,
+                                e.message?.takeIf { it.isNotBlank() }
+                                    ?: e.javaClass.simpleName,
+                            )
+                        }
+                    }
+                }
+            },
+            "tvclaw-wss",
+        ).start()
+    }
+
+    private fun registerNsd(port: Int, reportConnectResult: Boolean) {
+        unregisterNsdQuietly()
+        val mgr = getSystemService(Context.NSD_SERVICE) as NsdManager
+        nsdManager = mgr
+        val safeName =
+            "TVClaw-${Build.MODEL}".replace(Regex("[^a-zA-Z0-9-]"), "-").take(50)
+        val info = NsdServiceInfo().apply {
+            serviceName = safeName
+            serviceType = SERVICE_TYPE
+            setPort(port)
         }
-        val req = Request.Builder().url(url).build()
-        val ws = client.newWebSocket(req, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
+        val listener = object : NsdManager.RegistrationListener {
+            override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
+                if (!reportConnectResult) {
+                    return
+                }
                 mainHandler.post {
-                    if (feedbackGen != -1 && feedbackGen == connectFeedbackGeneration) {
-                        connectTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-                        connectTimeoutRunnable = null
-                        emitConnectResult(true, null)
-                    }
+                    emitConnectResult(
+                        true,
+                        getString(
+                            R.string.bridge_nsd_ok,
+                            serviceInfo.serviceName,
+                            port,
+                        ),
+                    )
                 }
             }
 
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                TvClawAccessibilityService.postEnvelopeJson(text)
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            override fun onRegistrationFailed(
+                serviceInfo: NsdServiceInfo,
+                errorCode: Int,
+            ) {
+                if (!reportConnectResult) {
+                    return
+                }
                 mainHandler.post {
-                    socketRef.compareAndSet(webSocket, null)
-                    if (feedbackGen != -1 && feedbackGen == connectFeedbackGeneration) {
-                        connectTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-                        connectTimeoutRunnable = null
-                        val detail =
-                            t.message?.takeIf { it.isNotBlank() }
-                                ?: t.javaClass.simpleName
-                        emitConnectResult(false, detail)
-                    }
-                    scheduleReconnect()
+                    emitConnectResult(
+                        false,
+                        getString(R.string.bridge_nsd_failed, errorCode),
+                    )
                 }
             }
 
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                socketRef.compareAndSet(webSocket, null)
-                scheduleReconnect()
+            override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {}
+
+            override fun onUnregistrationFailed(
+                serviceInfo: NsdServiceInfo,
+                errorCode: Int,
+            ) {}
+        }
+        nsdRegistrationListener = listener
+        try {
+            mgr.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
+        } catch (e: Exception) {
+            if (reportConnectResult) {
+                emitConnectResult(
+                    false,
+                    e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName,
+                )
             }
-        })
-        socketRef.set(ws)
+        }
+    }
+
+    private fun unregisterNsdQuietly() {
+        val mgr = nsdManager
+        val listener = nsdRegistrationListener
+        if (mgr != null && listener != null) {
+            try {
+                mgr.unregisterService(listener)
+            } catch (_: Exception) {
+            }
+        }
+        nsdManager = null
+        nsdRegistrationListener = null
+    }
+
+    private fun stopCommandServerAndNsd() {
+        unregisterNsdQuietly()
+        try {
+            commandServer?.stop(1000)
+        } catch (_: Exception) {
+        }
+        commandServer = null
     }
 
     private fun emitConnectResult(ok: Boolean, message: String?) {
@@ -168,28 +235,15 @@ class TvClawBridgeService : Service() {
         )
     }
 
-    private fun scheduleReconnect() {
-        if (reconnect != null) return
-        reconnect = scheduler.schedule({
-            reconnect = null
-            connectNow(false)
-        }, 3, TimeUnit.SECONDS)
-    }
-
-    private fun disconnect() {
-        socketRef.getAndSet(null)?.close(1000, null)
-    }
-
     companion object {
         const val ACTION_START = "com.tvclaw.client.action.START_BRIDGE"
         const val ACTION_STOP = "com.tvclaw.client.action.STOP_BRIDGE"
         const val ACTION_BRIDGE_STATUS = "com.tvclaw.client.action.BRIDGE_STATUS"
-        const val EXTRA_WS_URL = "ws_url"
         const val EXTRA_REPORT_CONNECT_RESULT = "report_connect_result"
         const val EXTRA_BRIDGE_OK = "bridge_ok"
         const val EXTRA_BRIDGE_MESSAGE = "bridge_message"
         private const val CHANNEL_ID = "tvclaw_bridge"
         private const val NOTIFICATION_ID = 42
-        private const val CONNECT_FEEDBACK_TIMEOUT_MS = 8_000L
+        private const val SERVICE_TYPE = "_tvclaw._tcp"
     }
 }
