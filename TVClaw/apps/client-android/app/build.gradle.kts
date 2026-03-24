@@ -23,8 +23,8 @@ android {
         applicationId = "com.tvclaw.client"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.0.13"
+        versionCode = 22
+        versionName = "0.0.22"
         buildConfigField("int", "TVCLAW_WS_LISTEN_PORT", "$tvClawWsListenPort")
         buildConfigField(
             "String",

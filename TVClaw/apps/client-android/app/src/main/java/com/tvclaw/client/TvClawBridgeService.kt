@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
+import android.util.Log
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.nsd.NsdManager
@@ -24,6 +25,7 @@ class TvClawBridgeService : Service() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var commandServer: WebSocketServer? = null
+    private val connectedClients = java.util.concurrent.CopyOnWriteArraySet<WebSocket>()
     private var nsdManager: NsdManager? = null
     private var nsdRegistrationListener: NsdManager.RegistrationListener? = null
 
@@ -100,7 +102,10 @@ class TvClawBridgeService : Service() {
                     }
                 }
 
-                override fun onOpen(conn: WebSocket?, handshake: ClientHandshake?) {}
+                override fun onOpen(conn: WebSocket?, handshake: ClientHandshake?) {
+                    if (conn != null) connectedClients.add(conn)
+                    instance = this@TvClawBridgeService
+                }
 
                 override fun onClose(
                     conn: WebSocket?,
@@ -108,6 +113,7 @@ class TvClawBridgeService : Service() {
                     reason: String?,
                     remote: Boolean,
                 ) {
+                    if (conn != null) connectedClients.remove(conn)
                 }
 
                 override fun onMessage(conn: WebSocket?, message: String?) {
@@ -217,11 +223,23 @@ class TvClawBridgeService : Service() {
 
     private fun stopCommandServerAndNsd() {
         unregisterNsdQuietly()
+        connectedClients.clear()
+        instance = null
         try {
             commandServer?.stop(1000)
         } catch (_: Exception) {
         }
         commandServer = null
+    }
+
+    fun sendToBrain(message: String) {
+        for (client in connectedClients) {
+            try {
+                if (client.isOpen) client.send(message)
+            } catch (e: Exception) {
+                Log.w(TAG, "sendToBrain failed for client", e)
+            }
+        }
     }
 
     private fun emitConnectResult(ok: Boolean, message: String?) {
@@ -236,6 +254,13 @@ class TvClawBridgeService : Service() {
     }
 
     companion object {
+        private const val TAG = "TvClawBridge"
+        @Volatile var instance: TvClawBridgeService? = null
+
+        fun broadcast(message: String) {
+            instance?.sendToBrain(message)
+        }
+
         const val ACTION_START = "com.tvclaw.client.action.START_BRIDGE"
         const val ACTION_STOP = "com.tvclaw.client.action.STOP_BRIDGE"
         const val ACTION_BRIDGE_STATUS = "com.tvclaw.client.action.BRIDGE_STATUS"

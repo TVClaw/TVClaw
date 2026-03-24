@@ -1,7 +1,11 @@
 export type ProtocolAction =
   | "LAUNCH_APP"
+  | "OPEN_URL"
   | "SEARCH"
+  | "UNIVERSAL_SEARCH"
   | "MEDIA_CONTROL"
+  | "KEY_EVENT"
+  | "SLEEP_TIMER"
   | "VISION_SYNC"
   | "SHOW_TOAST";
 
@@ -9,16 +13,42 @@ export type MediaControl =
   | "PLAY"
   | "PAUSE"
   | "REWIND_30"
+  | "FAST_FORWARD_30"
   | "MUTE"
   | "HOME"
   | "BACK";
 
+export type TvKeyCode =
+  | "DPAD_UP"
+  | "DPAD_DOWN"
+  | "DPAD_LEFT"
+  | "DPAD_RIGHT"
+  | "DPAD_CENTER"
+  | "ENTER"
+  | "BACK"
+  | "HOME"
+  | "MENU"
+  | "CHANNEL_UP"
+  | "CHANNEL_DOWN"
+  | "VOLUME_UP"
+  | "VOLUME_DOWN";
+
 export interface ProtocolParams {
   app_id?: string;
+  url?: string;
   query?: string;
   control?: MediaControl;
+  keycode?: TvKeyCode;
   value?: string | number;
   message?: string;
+  request_id?: string;
+}
+
+export interface VisionSyncResponse {
+  type: "vision_sync_response";
+  request_id: string;
+  jpeg_base64?: string;
+  error?: string;
 }
 
 export interface ProtocolPayload {

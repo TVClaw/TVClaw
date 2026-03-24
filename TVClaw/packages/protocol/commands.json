@@ -1,8 +1,11 @@
 {
-  "version": 1,
+  "version": 2,
   "envelope": ["request_id", "timestamp", "payload"],
   "payload": ["action", "params"],
-  "actions": ["LAUNCH_APP", "SEARCH", "MEDIA_CONTROL", "VISION_SYNC", "SHOW_TOAST"],
-  "params": ["app_id", "query", "control", "value", "message"],
-  "media_controls": ["PLAY", "PAUSE", "REWIND_30", "MUTE"]
+  "actions": ["LAUNCH_APP", "OPEN_URL", "SEARCH", "UNIVERSAL_SEARCH", "MEDIA_CONTROL", "KEY_EVENT", "SLEEP_TIMER", "VISION_SYNC", "SHOW_TOAST"],
+  "params": ["app_id", "url", "query", "control", "keycode", "value", "message", "request_id"],
+  "media_controls": ["PLAY", "PAUSE", "REWIND_30", "FAST_FORWARD_30", "MUTE", "HOME", "BACK"],
+  "key_codes": ["DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT", "DPAD_CENTER", "ENTER", "BACK", "HOME", "MENU", "CHANNEL_UP", "CHANNEL_DOWN", "VOLUME_UP", "VOLUME_DOWN"],
+  "tv_responses": ["vision_sync_response"],
+  "vision_sync_response": ["type", "request_id", "jpeg_base64", "error"]
 }
