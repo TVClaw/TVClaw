@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+NANO="$ROOT/nanoclaw2"
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+start)
+  cd "$NANO" && exec npm start
+  ;;
+dev)
+  cd "$NANO" && exec npm run dev:live
+  ;;
+auth)
+  cd "$NANO" && exec npm run auth -- "$@"
+  ;;
+auth-ai | auth:ai)
+  cd "$NANO" && exec npm run auth:ai -- "$@"
+  ;;
+link-whatsapp | link:whatsapp)
+  cd "$NANO" && exec npm run link:whatsapp -- "$@"
+  ;;
+verify)
+  cd "$NANO" && exec npx tsx setup/index.ts --step verify
+  ;;
+setup)
+  cd "$NANO" && exec npx tsx setup/index.ts "$@"
+  ;;
+"")
+  cat <<EOF
+tvclaw — TVClaw helper
+  tvclaw start
+  tvclaw dev
+  tvclaw auth [--browser-qr]
+  tvclaw auth-ai
+  tvclaw link-whatsapp
+  tvclaw verify
+  tvclaw setup -- --step <name> ...
+Repo: $ROOT
+NanoClaw: $NANO
+EOF
+  exit 0
+  ;;
+*)
+  echo "unknown command: $cmd" >&2
+  exit 1
+  ;;
+esac

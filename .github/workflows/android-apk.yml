@@ -1,0 +1,44 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "prebuilt/tvclaw-android.apk"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Gradle build
+        working-directory: TVClaw/apps/client-android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvclaw-android-apk
+          path: TVClaw/apps/client-android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Commit prebuilt APK
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p prebuilt
+          cp TVClaw/apps/client-android/app/build/outputs/apk/debug/app-debug.apk prebuilt/tvclaw-android.apk
+          git add prebuilt/tvclaw-android.apk
+          if git diff --staged --quiet; then
+            echo "APK unchanged, nothing to commit."
+          else
+            git commit -m "chore(prebuilt): update tvclaw-android.apk [skip ci]"
+            git push
+          fi
