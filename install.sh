@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+tty_read() {
+  if [[ -t 0 ]]; then
+    read "$@"
+  elif [[ -r /dev/tty ]]; then
+    read "$@" < /dev/tty
+  else
+    read "$@"
+  fi
+}
+
 TVCLAW_CLONE_DIR="${TVCLAW_CLONE_DIR:-$HOME/TVClaw}"
 TVCLAW_REPO_URL="${TVCLAW_REPO_URL:-https://github.com/TVClaw/TVClaw.git}"
 TVCLAW_APK_URL="${TVCLAW_APK_URL:-https://raw.githubusercontent.com/TVClaw/TVClaw/main/prebuilt/tvclaw-android.apk}"
@@ -25,7 +35,8 @@ EOF
 }
 
 usage() {
-  echo "usage: curl -fsSL .../install.sh | bash"
+  echo "usage: curl -fsSL .../install.sh | bash   (prompts use /dev/tty)"
+  echo "   or: curl -fsSL .../install.sh -o install.sh && bash install.sh"
   echo "   or: bash install.sh"
   echo "env: TVCLAW_SKIP_CLONE=1 TVCLAW_REPO_ROOT=/path TVCLAW_SKIP_AUTH_AI=1 TVCLAW_SKIP_WHATSAPP=1 TVCLAW_SKIP_APK=1 TVCLAW_SKIP_SERVICE=1 TVCLAW_WA_BROWSER_QR=0"
   exit 0
@@ -146,7 +157,7 @@ ensure_node() {
   fi
   echo "Node.js 20+ required."
   if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
-    read -r -p "Install Node via Homebrew? [Y/n] " x
+    tty_read -r -p "Install Node via Homebrew? [Y/n] " x
     if [[ -z "$x" || "$x" =~ ^[Yy] ]]; then
       brew install node@22 || brew install node
       if [[ -d "/opt/homebrew/opt/node@22/bin" ]]; then
@@ -184,7 +195,7 @@ ensure_docker() {
   if [[ "$(uname -s)" == "Darwin" ]]; then
     if ! command -v docker >/dev/null 2>&1; then
       if command -v brew >/dev/null 2>&1; then
-        read -r -p "Install Docker Desktop via Homebrew cask? [Y/n] " x
+        tty_read -r -p "Install Docker Desktop via Homebrew cask? [Y/n] " x
         if [[ -z "$x" || "$x" =~ ^[Yy] ]]; then
           brew install --cask docker
         fi
@@ -196,7 +207,7 @@ ensure_docker() {
       open -a Docker 2>/dev/null || true
     fi
   elif [[ "$(uname -s)" == "Linux" ]]; then
-    read -r -p "Install Docker Engine via get.docker.com (needs sudo)? [Y/n] " x
+    tty_read -r -p "Install Docker Engine via get.docker.com (needs sudo)? [Y/n] " x
     if [[ -z "$x" || "$x" =~ ^[Yy] ]]; then
       curl -fsSL https://get.docker.com | sh
       if [[ "$(id -u)" -ne 0 ]]; then
@@ -282,7 +293,7 @@ apk_install_step() {
   echo "Phone/TV must be on the same Wi‑Fi. Scan QR to download (installer may block — allow unknown sources):"
   print_url_qr "$url"
   echo "$url"
-  read -r -p "Press Enter when done downloading/installing…" _
+  tty_read -r -p "Press Enter when done downloading/installing…" _
   kill "$HTTP_PID" 2>/dev/null || true
   HTTP_PID=0
 }
@@ -331,7 +342,7 @@ main() {
   npx tsx setup/index.ts --step mounts -- --empty
   npx tsx setup/index.ts --step container -- --runtime "$crt"
   if [[ "${TVCLAW_SKIP_SERVICE:-}" != "1" ]]; then
-    read -r -p "Install background service (launchd/systemd)? [Y/n] " sx
+    tty_read -r -p "Install background service (launchd/systemd)? [Y/n] " sx
     if [[ -z "$sx" || "$sx" =~ ^[Yy] ]]; then
       npx tsx setup/index.ts --step service || true
     fi
