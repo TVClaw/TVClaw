@@ -1,0 +1,3 @@
+[submodule "nanoclaw2"]
+	path = nanoclaw2
+	url = https://github.com/TVClaw/nanoclaw2.git

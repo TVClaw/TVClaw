@@ -69,6 +69,29 @@ detect_repo_root() {
   return 1
 }
 
+nanoclaw2_clone_url() {
+  local dest="$1"
+  local u=""
+  if [[ -f "$dest/.gitmodules" ]]; then
+    u=$(git config -f "$dest/.gitmodules" --get submodule.nanoclaw2.url 2>/dev/null) || true
+  fi
+  if [[ -n "$u" ]]; then
+    echo "$u"
+  else
+    echo "https://github.com/TVClaw/nanoclaw2.git"
+  fi
+}
+
+ensure_nanoclaw2_dir() {
+  local dest="$1"
+  [[ -f "$dest/nanoclaw2/setup.sh" ]] && return 0
+  local url
+  url=$(nanoclaw2_clone_url "$dest")
+  echo "Pulling nanoclaw2 (standalone clone — parent repo may not record the submodule gitlink yet)…"
+  rm -rf "$dest/nanoclaw2"
+  git clone --depth 1 "$url" "$dest/nanoclaw2"
+}
+
 clone_repo() {
   local dest="$1"
   if [[ -e "$dest" && ! -d "$dest/.git" ]]; then
@@ -76,14 +99,14 @@ clone_repo() {
     exit 1
   fi
   if [[ ! -d "$dest/.git" ]]; then
-    git clone --depth 1 --recurse-submodules "$TVCLAW_REPO_URL" "$dest"
+    git clone --depth 1 --recurse-submodules "$TVCLAW_REPO_URL" "$dest" || git clone --depth 1 "$TVCLAW_REPO_URL" "$dest"
   else
-    git -C "$dest" submodule sync --recursive
-    git -C "$dest" submodule update --init --recursive
+    git -C "$dest" submodule sync --recursive 2>/dev/null || true
+    git -C "$dest" submodule update --init --recursive 2>/dev/null || true
   fi
+  ensure_nanoclaw2_dir "$dest"
   if [[ ! -f "$dest/nanoclaw2/setup.sh" ]]; then
-    echo "nanoclaw2 is missing after clone. Submodules must use HTTPS in .gitmodules for curl|bash installs." >&2
-    echo "Fix: rm -rf \"$dest\" and re-run, or: cd \"$dest\" && git submodule update --init --recursive" >&2
+    echo "Could not obtain nanoclaw2 — ensure https://github.com/TVClaw/nanoclaw2 is public." >&2
     exit 1
   fi
 }
