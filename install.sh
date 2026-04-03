@@ -76,9 +76,16 @@ clone_repo() {
     exit 1
   fi
   if [[ ! -d "$dest/.git" ]]; then
-    git clone --depth 1 "$TVCLAW_REPO_URL" "$dest"
+    git clone --depth 1 --recurse-submodules "$TVCLAW_REPO_URL" "$dest"
+  else
+    git -C "$dest" submodule sync --recursive
+    git -C "$dest" submodule update --init --recursive
   fi
-  git -C "$dest" submodule update --init --recursive --depth 1 2>/dev/null || git -C "$dest" submodule update --init --recursive
+  if [[ ! -f "$dest/nanoclaw2/setup.sh" ]]; then
+    echo "nanoclaw2 is missing after clone. Submodules must use HTTPS in .gitmodules for curl|bash installs." >&2
+    echo "Fix: rm -rf \"$dest\" and re-run, or: cd \"$dest\" && git submodule update --init --recursive" >&2
+    exit 1
+  fi
 }
 
 ensure_repo() {
