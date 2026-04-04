@@ -9,49 +9,52 @@
         android:id="@+id/appLogo"
         android:layout_width="120dp"
         android:layout_height="120dp"
-        android:layout_marginBottom="24dp"
-        android:contentDescription="TVClaw Logo"
+        android:layout_marginBottom="16dp"
+        android:contentDescription="@string/app_name"
         android:src="@drawable/ic_launcher_foreground"
         android:scaleType="fitCenter"
-        app:layout_constraintBottom_toTopOf="@+id/openAccessibility"
+        app:layout_constraintBottom_toTopOf="@+id/progressConnect"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_chainStyle="packed" />
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/openAccessibility"
+    <ProgressBar
+        android:id="@+id/progressConnect"
+        style="?android:attr/progressBarStyleLarge"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="0dp"
-        android:text="@string/open_accessibility_settings"
-        app:layout_constraintBottom_toTopOf="@+id/connectBridge"
+        android:layout_marginBottom="12dp"
+        app:layout_constraintBottom_toTopOf="@+id/statusText"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/appLogo"
-        app:layout_constraintVertical_chainStyle="packed" />
+        app:layout_constraintTop_toBottomOf="@+id/appLogo" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:lineSpacingMultiplier="1.15"
+        android:text="@string/status_connecting_brain"
+        android:textAppearance="?attr/textAppearanceBodyLarge"
+        app:layout_constraintBottom_toTopOf="@+id/retryBridge"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/progressConnect"
+        app:layout_constraintWidth_max="420dp" />
 
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/connectBridge"
+        android:id="@+id/retryBridge"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="@string/connect_bridge"
-        app:layout_constraintBottom_toTopOf="@+id/disconnectBridge"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/openAccessibility" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/disconnectBridge"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="@string/disconnect_bridge"
+        android:text="@string/retry_connect_bridge"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/updateApp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/connectBridge" />
+        app:layout_constraintTop_toBottomOf="@+id/statusText" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/updateApp"
@@ -59,10 +62,23 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="@string/update_app"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/testConnection"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/retryBridge" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/testConnection"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/test_connection"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/versionFooter"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/disconnectBridge" />
+        app:layout_constraintTop_toBottomOf="@+id/updateApp" />
 
     <TextView
         android:id="@+id/versionFooter"
@@ -73,5 +89,6 @@
         android:textColor="?android:attr/textColorSecondary"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/testConnection" />
 </androidx.constraintlayout.widget.ConstraintLayout>

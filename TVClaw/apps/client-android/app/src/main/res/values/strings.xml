@@ -2,18 +2,20 @@
 <resources>
     <string name="app_name">TVClaw</string>
     <string name="accessibility_service_description">TVClaw executes remote TV commands from your paired brain.</string>
-    <string name="open_accessibility_settings">Open Accessibility settings</string>
-    <string name="open_accessibility_entry_tv">TVClaw in Settings (step 1)</string>
-    <string name="connect_bridge">Start TV bridge</string>
-    <string name="disconnect_bridge">Stop TV bridge</string>
     <string name="notification_channel_name">Brain bridge</string>
+    <string name="notification_toast_channel_name">Messages from your TVClaw brain</string>
     <string name="notification_bridge_running">TVClaw listening (mDNS)</string>
-    <string name="open_accessibility_failed">Use the remote: Settings → Device preferences → Accessibility → enable TVClaw</string>
-    <string name="open_accessibility_navigate_hint">Then open Accessibility and enable TVClaw</string>
+    <string name="status_connecting_brain">Looking for your TVClaw brain on the network…\n\nBuild %1$d — auto-connect (there is no Start bridge button on this build).</string>
+    <string name="status_connected_whatsapp_hint">Connected to the brain.\n\nYou can steer the TV from your TVClaw WhatsApp group on your phone.\n\nTo run apps, search, and remote keys, turn on TVClaw in Android Accessibility:\n\n1) Open Settings on this TV\n2) Device preferences (or System) → Accessibility\n3) Find TVClaw in the installed services list\n4) Open it and turn it ON\n5) Confirm any system prompt\n\nThen use “Test connection” to verify.</string>
+    <string name="test_connection">Test connection</string>
+    <string name="test_connection_success">Connection successful</string>
+    <string name="test_connection_not_ready">Brain link is not ready yet. Wait for “Connected to the brain” above, or tap Try again.</string>
+    <string name="test_connection_need_accessibility">Brain is connected, but TVClaw Accessibility is still OFF. Follow the steps above in Settings → Accessibility, then test again.</string>
+    <string name="status_bridge_stopped">TV bridge stopped. Tap try again when you want to connect.</string>
+    <string name="retry_connect_bridge">Try again</string>
     <string name="bridge_connect_ok">TV bridge ready</string>
     <string name="bridge_nsd_ok">Advertising as %1$s on port %2$d — brain can find this TV</string>
     <string name="bridge_nsd_failed">Network registration failed (code %1$d). Commands may still work if the brain knows this IP.</string>
-    <string name="update_app_need_http_url">Set tvclaw.brain.http.url in local.properties to download updates from your Mac</string>
     <string name="bridge_connect_failed">Could not connect: %1$s</string>
     <string name="bridge_connect_timeout">Connection timed out</string>
     <string name="update_app">Update app</string>

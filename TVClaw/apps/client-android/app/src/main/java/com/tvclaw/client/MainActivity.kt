@@ -3,7 +3,6 @@ package com.tvclaw.client
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -12,6 +11,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
+import android.view.accessibility.AccessibilityManager
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -46,14 +48,11 @@ class MainActivity : AppCompatActivity() {
             }
             val ok = intent.getBooleanExtra(TvClawBridgeService.EXTRA_BRIDGE_OK, false)
             val msg = intent.getStringExtra(TvClawBridgeService.EXTRA_BRIDGE_MESSAGE)
-            val text =
-                if (ok) {
-                    msg?.takeIf { it.isNotBlank() }
-                        ?: getString(R.string.bridge_connect_ok)
-                } else {
-                    getString(R.string.bridge_connect_failed, msg ?: "")
-                }
-            Toast.makeText(this@MainActivity, text, Toast.LENGTH_LONG).show()
+            if (ok) {
+                showBridgeSuccessUi()
+            } else {
+                showBridgeFailureUi(msg ?: "")
+            }
         }
     }
 
@@ -63,43 +62,28 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         binding.versionFooter.text =
             if (BuildConfig.DEBUG) {
-                "debug-${BuildConfig.VERSION_NAME}"
+                "debug · v${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}"
             } else {
-                BuildConfig.VERSION_NAME
+                "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
             }
         ensurePostNotificationsPermission()
-        if (packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) {
-            binding.openAccessibility.setText(R.string.open_accessibility_entry_tv)
+        binding.retryBridge.setOnClickListener {
+            startBridgeWithReport()
         }
-        binding.openAccessibility.setOnClickListener {
-            openAccessibilitySettingsBestEffort()
-        }
-        binding.connectBridge.setOnClickListener {
-            ContextCompat.startForegroundService(
-                this,
-                Intent(this, TvClawBridgeService::class.java).apply {
-                    action = TvClawBridgeService.ACTION_START
-                    putExtra(TvClawBridgeService.EXTRA_REPORT_CONNECT_RESULT, true)
-                }
-            )
-        }
-        binding.disconnectBridge.setOnClickListener {
-            startService(
-                Intent(this, TvClawBridgeService::class.java).apply {
-                    action = TvClawBridgeService.ACTION_STOP
-                }
-            )
-        }
-        binding.updateApp.setOnClickListener {
-            val base = BuildConfig.TVCLAW_BRAIN_HTTP_URL.trim()
-            if (base.isEmpty()) {
-                Toast.makeText(
-                    this,
-                    R.string.update_app_need_http_url,
-                    Toast.LENGTH_LONG,
-                ).show()
+        binding.testConnection.setOnClickListener {
+            val (ok, _) = readBridgePrefs()
+            if (ok != true) {
+                Toast.makeText(this, R.string.test_connection_not_ready, Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
+            if (!isTvClawAccessibilityEnabled()) {
+                Toast.makeText(this, R.string.test_connection_need_accessibility, Toast.LENGTH_LONG)
+                    .show()
+                return@setOnClickListener
+            }
+            Toast.makeText(this, R.string.test_connection_success, Toast.LENGTH_LONG).show()
+        }
+        binding.updateApp.setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                 !packageManager.canRequestPackageInstalls()
             ) {
@@ -128,7 +112,10 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.update_app_downloading), Toast.LENGTH_SHORT).show()
             thread {
                 try {
-                    val apkUrl = brainHttpApkUrlFromBase(base)
+                    val apkUrl = BuildConfig.TVCLAW_UPDATE_APK_URL.trim()
+                    if (apkUrl.isEmpty()) {
+                        throw IOException("empty TVCLAW_UPDATE_APK_URL")
+                    }
                     val out = File(cacheDir, "tvclaw-update.apk")
                     downloadToFile(apkUrl, out)
                     val uri = FileProvider.getUriForFile(
@@ -166,26 +153,86 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        if (savedInstanceState == null) {
+            val (ok, msg) = readBridgePrefs()
+            when {
+                ok == true -> applyUiFromStoredBridgeStatus()
+                ok == false && msg == BRIDGE_STOPPED_MARKER -> applyUiFromStoredBridgeStatus()
+                else -> startBridgeWithReport()
+            }
+        } else {
+            applyUiFromStoredBridgeStatus()
+        }
     }
 
-    private fun brainHttpApkUrlFromBase(httpBase: String): String {
-        val u = Uri.parse(httpBase)
-        val host = u.host ?: throw IllegalArgumentException("missing host")
-        val scheme = u.scheme?.lowercase() ?: "http"
-        if (scheme != "http" && scheme != "https") {
-            throw IllegalArgumentException("expected http or https")
+    private fun startBridgeWithReport() {
+        getSharedPreferences(TvClawBridgeService.BRIDGE_PREFS, MODE_PRIVATE).edit().clear()
+            .apply()
+        binding.progressConnect.visibility = View.VISIBLE
+        binding.statusText.text = getString(R.string.status_connecting_brain, BuildConfig.VERSION_CODE)
+        binding.retryBridge.visibility = View.GONE
+        binding.updateApp.visibility = View.GONE
+        binding.testConnection.visibility = View.GONE
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, TvClawBridgeService::class.java).apply {
+                action = TvClawBridgeService.ACTION_START
+                putExtra(TvClawBridgeService.EXTRA_REPORT_CONNECT_RESULT, true)
+            },
+        )
+    }
+
+    private fun readBridgePrefs(): Pair<Boolean?, String?> {
+        val p = getSharedPreferences(TvClawBridgeService.BRIDGE_PREFS, MODE_PRIVATE)
+        if (!p.contains(TvClawBridgeService.PREF_BRIDGE_OK)) {
+            return Pair(null, null)
         }
-        val port = u.port.takeIf { it != -1 }
-        val hostPort =
-            if (port == null ||
-                (scheme == "http" && port == 80) ||
-                (scheme == "https" && port == 443)
-            ) {
-                host
-            } else {
-                "$host:$port"
+        return Pair(
+            p.getBoolean(TvClawBridgeService.PREF_BRIDGE_OK, false),
+            p.getString(TvClawBridgeService.PREF_BRIDGE_MSG, null),
+        )
+    }
+
+    private fun applyUiFromStoredBridgeStatus() {
+        val (ok, msg) = readBridgePrefs()
+        when {
+            ok == null -> {
+                binding.progressConnect.visibility = View.VISIBLE
+                binding.statusText.text =
+                    getString(R.string.status_connecting_brain, BuildConfig.VERSION_CODE)
+                binding.retryBridge.visibility = View.GONE
+                binding.updateApp.visibility = View.GONE
+                binding.testConnection.visibility = View.GONE
             }
-        return "$scheme://$hostPort/tvclaw-client.apk"
+            ok -> showBridgeSuccessUi()
+            msg == BRIDGE_STOPPED_MARKER -> showBridgeStoppedUi()
+            else -> showBridgeFailureUi(msg ?: "")
+        }
+    }
+
+    private fun showBridgeSuccessUi() {
+        binding.progressConnect.visibility = View.GONE
+        binding.statusText.text = getString(R.string.status_connected_whatsapp_hint)
+        binding.retryBridge.visibility = View.GONE
+        binding.updateApp.visibility = View.VISIBLE
+        binding.testConnection.visibility = View.VISIBLE
+    }
+
+    private fun showBridgeFailureUi(msg: String) {
+        binding.progressConnect.visibility = View.GONE
+        binding.statusText.text = getString(R.string.bridge_connect_failed, msg)
+        binding.retryBridge.visibility = View.VISIBLE
+        binding.updateApp.visibility = View.GONE
+        binding.testConnection.visibility = View.GONE
+    }
+
+    private fun showBridgeStoppedUi() {
+        binding.progressConnect.visibility = View.GONE
+        binding.statusText.setText(R.string.status_bridge_stopped)
+        binding.retryBridge.visibility = View.VISIBLE
+        binding.updateApp.visibility = View.GONE
+        binding.testConnection.visibility = View.GONE
     }
 
     private fun downloadToFile(url: String, out: File) {
@@ -212,9 +259,28 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    override fun onResume() {
+        super.onResume()
+        applyUiFromStoredBridgeStatus()
+    }
+
     override fun onStop() {
         unregisterReceiver(bridgeStatusReceiver)
         super.onStop()
+    }
+
+    private fun isTvClawAccessibilityEnabled(): Boolean {
+        val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val list =
+            am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        val want = android.content.ComponentName(this, TvClawAccessibilityService::class.java)
+        for (info in list) {
+            val si = info.resolveInfo.serviceInfo
+            if (si.packageName == want.packageName && si.name == want.className) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun ensurePostNotificationsPermission() {
@@ -229,85 +295,7 @@ class MainActivity : AppCompatActivity() {
         requestPostNotificationsPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    private fun intentResolvable(intent: Intent): Boolean {
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.resolveActivity(
-                    intent,
-                    PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()),
-                ) != null
-            } else {
-                @Suppress("DEPRECATION")
-                packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) != null
-            }
-        } catch (_: RuntimeException) {
-            false
-        }
-    }
-
-    private fun startIfResolved(intent: Intent): Boolean {
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (!intentResolvable(intent)) {
-            return false
-        }
-        return try {
-            startActivity(intent)
-            true
-        } catch (_: ActivityNotFoundException) {
-            false
-        }
-    }
-
-    private fun openAccessibilitySettingsBestEffort() {
-        val appDetails =
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", packageName, null)
-            }
-        val isTv = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
-        if (isTv && startIfResolved(appDetails)) {
-            Toast.makeText(this, R.string.open_accessibility_navigate_hint, Toast.LENGTH_LONG).show()
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val detail =
-                Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS").apply {
-                    putExtra(
-                        Intent.EXTRA_COMPONENT_NAME,
-                        ComponentName(this@MainActivity, TvClawAccessibilityService::class.java),
-                    )
-                }
-            if (startIfResolved(detail)) {
-                return
-            }
-        }
-        if (startIfResolved(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))) {
-            return
-        }
-        if (!isTv && startIfResolved(appDetails)) {
-            Toast.makeText(this, R.string.open_accessibility_navigate_hint, Toast.LENGTH_LONG).show()
-            return
-        }
-        val settingPkgs =
-            listOf(
-                "com.android.tv.settings",
-                "com.google.android.tv.axel.settings",
-                "com.xiaomi.mitv.settings",
-                "com.xiaomi.tv.settings",
-            )
-        for (pkg in settingPkgs) {
-            val launch =
-                packageManager.getLeanbackLaunchIntentForPackage(pkg)
-                    ?: packageManager.getLaunchIntentForPackage(pkg)
-            if (launch != null && startIfResolved(launch)) {
-                Toast.makeText(this, R.string.open_accessibility_navigate_hint, Toast.LENGTH_LONG)
-                    .show()
-                return
-            }
-        }
-        if (startIfResolved(Intent(Settings.ACTION_SETTINGS))) {
-            Toast.makeText(this, R.string.open_accessibility_navigate_hint, Toast.LENGTH_LONG).show()
-        } else {
-            Toast.makeText(this, R.string.open_accessibility_failed, Toast.LENGTH_LONG).show()
-        }
+    companion object {
+        private const val BRIDGE_STOPPED_MARKER = "user_stopped"
     }
 }

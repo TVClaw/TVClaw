@@ -12,12 +12,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
-import android.app.AlertDialog
 import android.util.Base64
 import android.util.Log
 import android.view.Display
 import android.view.KeyEvent
-import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONObject
@@ -107,23 +105,6 @@ class TvClawAccessibilityService : AccessibilityService() {
             "KEY_EVENT" -> {
                 val keyName = params.optString("keycode")
                 mainHandler.post { dispatchKeyByName(keyName) }
-            }
-            "SHOW_TOAST" -> {
-                val msg =
-                    params.optString("message").takeIf { it.isNotBlank() }
-                        ?: "TVClaw POC"
-                mainHandler.post {
-                    val ctx = this@TvClawAccessibilityService
-                    val dialog =
-                        AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                            .setTitle("TVClaw")
-                            .setMessage(msg)
-                            .setPositiveButton(android.R.string.ok) { d, _ -> d.dismiss() }
-                            .setCancelable(true)
-                            .create()
-                    dialog.window?.setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
-                    dialog.show()
-                }
             }
             else -> Log.w(TAG, "unknown action: $action")
         }
@@ -297,7 +278,8 @@ class TvClawAccessibilityService : AccessibilityService() {
             Log.w(TAG, "OPEN_URL missing url")
             return
         }
-        val pkg = appIdSpec.trim().takeIf { it.isNotEmpty() }?.let { resolveTargetPackage(it) }
+        val pkg =
+            appIdSpec.trim().takeIf { it.isNotEmpty() }?.let { resolveTargetPackage(it) }
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (!pkg.isNullOrEmpty()) setPackage(pkg)
@@ -498,13 +480,13 @@ class TvClawAccessibilityService : AccessibilityService() {
         @Volatile
         var instance: TvClawAccessibilityService? = null
 
-        fun postEnvelopeJson(json: String) {
-            val svc = instance
-            if (svc == null) {
-                Log.w(TAG, "postEnvelopeJson dropped: accessibility service not running")
-                return
+        fun deliverEnvelope(json: String): Boolean {
+            val svc = instance ?: run {
+                Log.w(TAG, "deliverEnvelope: accessibility service not running")
+                return false
             }
             svc.enqueueEnvelopeJson(json)
+            return true
         }
     }
 }

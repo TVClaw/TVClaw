@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.nsd.NsdManager
@@ -17,6 +18,7 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import java.net.InetSocketAddress
+import org.json.JSONObject
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
@@ -34,12 +36,21 @@ class TvClawBridgeService : Service() {
     override fun onCreate() {
         super.onCreate()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID,
+                    getString(R.string.notification_channel_name),
+                    NotificationManager.IMPORTANCE_LOW,
+                ),
             )
-            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID_TOAST,
+                    getString(R.string.notification_toast_channel_name),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ),
+            )
         }
     }
 
@@ -89,6 +100,31 @@ class TvClawBridgeService : Service() {
             .build()
     }
 
+    private fun showBrainToastOrNotification(text: String) {
+        try {
+            Toast.makeText(applicationContext, text, Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Log.w(TAG, "Toast failed", e)
+        }
+        val open = PendingIntent.getActivity(
+            this,
+            1,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val n = NotificationCompat.Builder(this, CHANNEL_ID_TOAST)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(text.take(200))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        nm.notify(NOTIFICATION_TOAST_ID, n)
+    }
+
     private fun startServerAndNsd(reportConnectResult: Boolean) {
         stopCommandServerAndNsd()
         val listenPort = BuildConfig.TVCLAW_WS_LISTEN_PORT
@@ -117,9 +153,14 @@ class TvClawBridgeService : Service() {
                 }
 
                 override fun onMessage(conn: WebSocket?, message: String?) {
-                    if (message != null) {
-                        TvClawAccessibilityService.postEnvelopeJson(message)
+                    if (message == null) return
+                    extractShowToastMessage(message)?.let { text ->
+                        mainHandler.post {
+                            showBrainToastOrNotification(text)
+                        }
+                        return
                     }
+                    if (TvClawAccessibilityService.deliverEnvelope(message)) return
                 }
 
                 override fun onError(conn: WebSocket?, ex: Exception?) {}
@@ -242,7 +283,25 @@ class TvClawBridgeService : Service() {
         }
     }
 
+    private fun extractShowToastMessage(json: String): String? {
+        return runCatching {
+            val payload = JSONObject(json).optJSONObject("payload") ?: return@runCatching null
+            if (payload.optString("action") != "SHOW_TOAST") return@runCatching null
+            val params = payload.optJSONObject("params") ?: return@runCatching null
+            params.optString("message").takeIf { it.isNotBlank() }
+        }.getOrNull()
+    }
+
     private fun emitConnectResult(ok: Boolean, message: String?) {
+        getSharedPreferences(BRIDGE_PREFS, MODE_PRIVATE).edit().apply {
+            putBoolean(PREF_BRIDGE_OK, ok)
+            if (message != null) {
+                putString(PREF_BRIDGE_MSG, message)
+            } else {
+                remove(PREF_BRIDGE_MSG)
+            }
+            apply()
+        }
         sendBroadcast(
             Intent(ACTION_BRIDGE_STATUS).setPackage(packageName).apply {
                 putExtra(EXTRA_BRIDGE_OK, ok)
@@ -255,6 +314,9 @@ class TvClawBridgeService : Service() {
 
     companion object {
         private const val TAG = "TvClawBridge"
+        const val BRIDGE_PREFS = "tvclaw_bridge_status"
+        const val PREF_BRIDGE_OK = "bridge_ok"
+        const val PREF_BRIDGE_MSG = "bridge_msg"
         @Volatile var instance: TvClawBridgeService? = null
 
         fun broadcast(message: String) {
@@ -268,7 +330,9 @@ class TvClawBridgeService : Service() {
         const val EXTRA_BRIDGE_OK = "bridge_ok"
         const val EXTRA_BRIDGE_MESSAGE = "bridge_message"
         private const val CHANNEL_ID = "tvclaw_bridge"
+        private const val CHANNEL_ID_TOAST = "tvclaw_brain_toast"
         private const val NOTIFICATION_ID = 42
+        private const val NOTIFICATION_TOAST_ID = 43
         private const val SERVICE_TYPE = "_tvclaw._tcp"
     }
 }

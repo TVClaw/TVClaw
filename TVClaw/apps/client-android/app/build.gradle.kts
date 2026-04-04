@@ -15,6 +15,10 @@ val tvClawWsListenPort =
 val tvClawBrainHttpUrl =
     localProperties.getProperty("tvclaw.brain.http.url")?.trim()?.takeIf { it.isNotEmpty() } ?: ""
 
+val tvClawUpdateApkUrl =
+    localProperties.getProperty("tvclaw.update.apk.url")?.trim()?.takeIf { it.isNotEmpty() }
+        ?: "https://raw.githubusercontent.com/TVClaw/TVClaw/main/prebuilt/tvclaw-android.apk"
+
 android {
     namespace = "com.tvclaw.client"
     compileSdk = 35
@@ -23,13 +27,18 @@ android {
         applicationId = "com.tvclaw.client"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "0.0.24"
+        versionCode = 103
+        versionName = "0.2.1"
         buildConfigField("int", "TVCLAW_WS_LISTEN_PORT", "$tvClawWsListenPort")
         buildConfigField(
             "String",
             "TVCLAW_BRAIN_HTTP_URL",
             "\"${tvClawBrainHttpUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
+        )
+        buildConfigField(
+            "String",
+            "TVCLAW_UPDATE_APK_URL",
+            "\"${tvClawUpdateApkUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
         )
     }
 
