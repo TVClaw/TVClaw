@@ -515,33 +515,80 @@ apk_install_step() {
   echo ""
 
   cat >"$tmp/tvclaw_apk_serve.py" <<'EOS'
-import http.server
+import os
 import socketserver
 import sys
+from urllib.parse import unquote, urlparse
 
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, directory=None, **kwargs):
-        super().__init__(*args, directory=directory, **kwargs)
-
+class Handler(socketserver.StreamRequestHandler):
     def log_message(self, format, *args):
         pass
 
-    def end_headers(self):
-        base = (self.path.split("?", 1)[0] or "").lower()
-        if base.endswith(".apk"):
-            self.send_header(
-                "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"
-            )
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-        super().end_headers()
+    def handle(self):
+        try:
+            line = self.rfile.readline().decode("latin-1", errors="replace")
+        except OSError:
+            return
+        if not line:
+            return
+        parts = line.strip().split()
+        if len(parts) < 2:
+            return
+        method = parts[0].upper()
+        req_path = parts[1]
+        while True:
+            try:
+                h = self.rfile.readline().decode("latin-1", errors="replace")
+            except OSError:
+                return
+            if not h or h in ("\r\n", "\n"):
+                break
+        if method != "GET":
+            self.wfile.write(b"HTTP/1.1 405 Method Not Allowed\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+            return
+        path = unquote(urlparse(req_path).path or "/")
+        if not path.startswith("/"):
+            path = "/" + path
+        path = path.rstrip("/") or "/"
+        if path not in ("/", "/tvclaw.apk", "/index.html"):
+            self.wfile.write(b"HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+            return
+        root = self.server.serve_root
+        apk = os.path.join(root, "tvclaw.apk")
+        if not os.path.isfile(apk):
+            self.wfile.write(b"HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+            return
+        try:
+            with open(apk, "rb") as f:
+                data = f.read()
+        except OSError:
+            self.wfile.write(b"HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+            return
+        cl = str(len(data))
+        hdr = (
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/vnd.android.package-archive\r\n"
+            'Content-Disposition: attachment; filename="tvclaw.apk"\r\n'
+            f"Content-Length: {cl}\r\n"
+            "Cache-Control: no-store, no-cache, must-revalidate, max-age=0\r\n"
+            "Pragma: no-cache\r\n"
+            "Expires: 0\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+        ).encode("ascii")
+        self.wfile.write(hdr)
+        self.wfile.write(data)
+
+
+class Server(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
 
 
 def main():
     port = int(sys.argv[1])
     root = sys.argv[2]
-    factory = lambda rq, ad, srv: Handler(rq, ad, srv, directory=root)
-    with socketserver.ThreadingTCPServer(("0.0.0.0", port), factory) as httpd:
+    with Server(("0.0.0.0", port), Handler) as httpd:
+        httpd.serve_root = root
         httpd.serve_forever()
 
 
@@ -552,13 +599,13 @@ EOS
   HTTP_PID=$!
   disown "$HTTP_PID" 2>/dev/null || true
   sleep 1
-  url="http://${ip}:${port}/tvclaw.apk"
-  echo "This server sends no-cache headers for .apk so the TV browser is less likely to reuse an old download."
-  echo "The file tvclaw.apk matches the version, size, and SHA256 printed above."
+  url="http://${ip}:${port}"
+  echo "This server serves the APK at the address root (no path). No-cache headers apply so the TV browser is less likely to reuse an old download."
+  echo "The served file is the same tvclaw.apk matching the version, size, and SHA256 printed above."
   echo ""
   print_url_qr "$url"
   echo ""
-  echo "Type this on the TV:"
+  echo "Type this on the TV browser (same Wi‑Fi):"
   echo "  $url"
   echo ""
   echo "If you use the brain’s /tvclaw-client.apk link instead, open the brain home page again after each Gradle build so the download URL refreshes (TV browsers often reuse an old APK)."
