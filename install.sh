@@ -17,6 +17,57 @@ TVCLAW_REPO_URL="${TVCLAW_REPO_URL:-https://github.com/TVClaw/TVClaw.git}"
 TVCLAW_APK_URL="${TVCLAW_APK_URL:-https://raw.githubusercontent.com/TVClaw/TVClaw/main/prebuilt/tvclaw-android.apk}"
 STAR_URL="https://github.com/TVClaw/TVClaw"
 
+TVCLAW_PROGRESS_BG_PID=""
+TVCLAW_PROGRESS_SEQ=0
+
+tvclaw_progress_should_show() {
+  [[ "${TVCLAW_NO_PROGRESS:-0}" != "1" ]] || return 1
+  case "${CI:-}" in true|1|yes) return 1 ;; esac
+  [[ -t 2 ]] || return 1
+  return 0
+}
+
+tvclaw_heartbeat_stop() {
+  if [[ -n "${TVCLAW_PROGRESS_BG_PID:-}" ]] && kill -0 "$TVCLAW_PROGRESS_BG_PID" 2>/dev/null; then
+    kill "$TVCLAW_PROGRESS_BG_PID" 2>/dev/null || true
+    wait "$TVCLAW_PROGRESS_BG_PID" 2>/dev/null || true
+  fi
+  TVCLAW_PROGRESS_BG_PID=""
+  if tvclaw_progress_should_show; then
+    printf '\r\033[2K' >&2
+  fi
+}
+
+tvclaw_heartbeat_start() {
+  local label="$1"
+  tvclaw_heartbeat_stop
+  tvclaw_progress_should_show || return 0
+  (
+    local i=0
+    while true; do
+      if (( i % 2 == 0 )); then
+        printf '\r  \033[2K[%s] 🦞  %s' "$TVCLAW_PROGRESS_SEQ" "$label" >&2
+      else
+        printf '\r  \033[2K[%s] 📺  %s' "$TVCLAW_PROGRESS_SEQ" "$label" >&2
+      fi
+      sleep 0.4
+      i=$((i + 1))
+    done
+  ) &
+  TVCLAW_PROGRESS_BG_PID=$!
+}
+
+tvclaw_busy() {
+  local label="$1"
+  shift
+  TVCLAW_PROGRESS_SEQ=$((TVCLAW_PROGRESS_SEQ + 1))
+  tvclaw_heartbeat_start "$label"
+  local ec=0
+  "$@" || ec=$?
+  tvclaw_heartbeat_stop
+  return "$ec"
+}
+
 print_banner() {
   cat <<'EOF'
 
@@ -42,6 +93,7 @@ usage() {
   echo "env: TVCLAW_SKIP_CLONE=1 TVCLAW_REPO_ROOT=/path TVCLAW_SKIP_AUTH_AI=1 TVCLAW_SKIP_WHATSAPP=1 TVCLAW_SKIP_APK=1 TVCLAW_SKIP_SERVICE=0 TVCLAW_WA_BROWSER_QR=1"
   echo "     (background launchd/systemd is off by default; set TVCLAW_SKIP_SERVICE=0 to install it)"
   echo "     TVCLAW_SETUP_UI=0 TVCLAW_INSTALLER=0 — verbose setup logs for debugging"
+  echo "     TVCLAW_NO_PROGRESS=1 — disable animated 🦞/📺 progress on stderr"
   echo "     TVCLAW_WA_BROWSER_QR=1 opens one browser tab with a large QR; default is terminal-only QR"
   echo "     TVCLAW_ADB_IP=192.168.x.x — optional adb connect; TVCLAW_SKIP_WHATSAPP=1 skips WhatsApp steps and group messages"
   echo "     TVCLAW_LOCAL_APK=/path/to.apk — use this exact APK (skips download and Gradle)"
@@ -71,7 +123,7 @@ tvclaw_build_android_apk() {
   echo ""
   echo "  ··· Building TVClaw Android APK on this computer (Gradle) ···"
   echo ""
-  (cd "$root" && chmod +x ./gradlew 2>/dev/null || true && ./gradlew assembleDebug --no-daemon)
+  tvclaw_busy "Gradle assembleDebug (may take a few minutes)…" bash -c "cd \"$root\" && chmod +x ./gradlew 2>/dev/null || true && exec ./gradlew assembleDebug --no-daemon"
 }
 
 tvclaw_android_sdk_home() {
@@ -193,7 +245,7 @@ ensure_nanoclaw2_dir() {
   url=$(nanoclaw2_clone_url "$dest")
   echo "Pulling nanoclaw2 (standalone clone — parent repo may not record the submodule gitlink yet)…"
   rm -rf "$dest/nanoclaw2"
-  git clone --depth 1 "$url" "$dest/nanoclaw2"
+  tvclaw_busy "git clone nanoclaw2…" git clone --depth 1 "$url" "$dest/nanoclaw2"
 }
 
 clone_repo() {
@@ -203,10 +255,9 @@ clone_repo() {
     exit 1
   fi
   if [[ ! -d "$dest/.git" ]]; then
-    git clone --depth 1 --recurse-submodules "$TVCLAW_REPO_URL" "$dest" || git clone --depth 1 "$TVCLAW_REPO_URL" "$dest"
+    tvclaw_busy "git clone TVClaw…" bash -c "git clone --depth 1 --recurse-submodules \"$TVCLAW_REPO_URL\" \"$dest\" || git clone --depth 1 \"$TVCLAW_REPO_URL\" \"$dest\""
   else
-    git -C "$dest" submodule sync --recursive 2>/dev/null || true
-    git -C "$dest" submodule update --init --recursive 2>/dev/null || true
+    tvclaw_busy "git submodule update…" bash -c "git -C \"$dest\" submodule sync --recursive 2>/dev/null || true; exec git -C \"$dest\" submodule update --init --recursive"
   fi
   ensure_nanoclaw2_dir "$dest"
   if [[ ! -f "$dest/nanoclaw2/setup.sh" ]]; then
@@ -255,7 +306,7 @@ ensure_node() {
       x="n"
     fi
     if [[ -z "$x" || "$x" =~ ^[Yy] ]]; then
-      brew install node@22 || brew install node
+      tvclaw_busy "brew install Node.js…" bash -c "brew install node@22 || exec brew install node"
       if [[ -d "/opt/homebrew/opt/node@22/bin" ]]; then
         export PATH="/opt/homebrew/opt/node@22/bin:$PATH"
       elif [[ -d "/usr/local/opt/node@22/bin" ]]; then
@@ -272,12 +323,26 @@ ensure_node() {
 
 wait_docker() {
   local i
+  TVCLAW_PROGRESS_SEQ=$((TVCLAW_PROGRESS_SEQ + 1))
   for i in $(seq 1 90); do
     if docker info >/dev/null 2>&1; then
+      if tvclaw_progress_should_show; then
+        printf '\r\033[2K' >&2
+      fi
       return 0
+    fi
+    if tvclaw_progress_should_show; then
+      if (( i % 2 == 1 )); then
+        printf '\r  \033[2K[%s] 🦞  Waiting for Docker to respond… (%ss)' "$TVCLAW_PROGRESS_SEQ" "$(( (i - 1) * 2 ))" >&2
+      else
+        printf '\r  \033[2K[%s] 📺  Waiting for Docker to respond… (%ss)' "$TVCLAW_PROGRESS_SEQ" "$(( (i - 1) * 2 ))" >&2
+      fi
     fi
     sleep 2
   done
+  if tvclaw_progress_should_show; then
+    printf '\r\033[2K' >&2
+  fi
   return 1
 }
 
@@ -296,7 +361,7 @@ ensure_docker() {
           x="n"
         fi
         if [[ -z "$x" || "$x" =~ ^[Yy] ]]; then
-          brew install --cask docker
+          tvclaw_busy "brew install Docker Desktop…" brew install --cask docker
         fi
       else
         echo "Install Docker Desktop from https://www.docker.com/products/docker-desktop/" >&2
@@ -311,7 +376,7 @@ ensure_docker() {
       x="n"
     fi
     if [[ -z "$x" || "$x" =~ ^[Yy] ]]; then
-      curl -fsSL https://get.docker.com | sh
+      tvclaw_busy "Docker engine install script…" bash -c "curl -fsSL https://get.docker.com | sh"
       if [[ "$(id -u)" -ne 0 ]]; then
         sudo usermod -aG docker "$USER" 2>/dev/null || true
         echo "You may need to log out and back in for the docker group."
@@ -374,7 +439,7 @@ try_adb_install_apk() {
   [[ -n "$serial" ]] || return 1
   echo ""
   echo "Installing the TVClaw TV app via adb ($serial)…"
-  if out=$(adb -s "$serial" install -r "$apkip" 2>&1); then
+  if out=$(tvclaw_busy "adb install TV app (can take a minute)…" bash -c "adb -s \"$serial\" install -r \"$apkip\" 2>&1"); then
     echo "$out"
     echo "✓ TV app installed on the TV (adb). Open TVClaw on the TV when you are ready."
     return 0
@@ -385,13 +450,8 @@ try_adb_install_apk() {
 
 whatsapp_apk_followup() {
   [[ "${TVCLAW_SKIP_WHATSAPP:-}" == "1" ]] && return 0
-  (
-    cd "$NANOCLAW_ROOT" || exit 0
-    export TVCLAW_APK_HTTP_URL="${1:-}"
-    export TVCLAW_APK_FILE_PATH="${2:-}"
-    export TVCLAW_APK_INSTALLED_VIA_ADB="${3:-}"
-    npx tsx src/whatsapp-apk-followup.ts
-  ) 2>/dev/null || true
+  TVCLAW_APK_HTTP_URL="${1:-}" TVCLAW_APK_FILE_PATH="${2:-}" TVCLAW_APK_INSTALLED_VIA_ADB="${3:-}" \
+    tvclaw_busy "WhatsApp: posting TV app instructions…" bash -c 'cd "$1" && npx tsx src/whatsapp-apk-followup.ts' _ "$NANOCLAW_ROOT" || true
 }
 
 tvclaw_installer_brain_log_session() {
@@ -404,14 +464,28 @@ tvclaw_installer_brain_log_session() {
   : >"$logf"
   if command -v pkill >/dev/null 2>&1; then
     pkill -f "${NANOCLAW_ROOT}/dist/index\\.js" 2>/dev/null || true
-    sleep 1
+    tvclaw_busy "Preparing brain restart…" sleep 1
   fi
+  TVCLAW_PROGRESS_SEQ=$((TVCLAW_PROGRESS_SEQ + 1))
+  tvclaw_heartbeat_start "npm start is launching — first log lines may take a moment…"
   (
     cd "$NANOCLAW_ROOT" || exit 1
     LOG_LEVEL="${TVCLAW_BRAIN_LOG_LEVEL:-info}" TVCLAW_INSTALLER= npm start
   ) >>"$logf" 2>&1 &
   local bp=$!
   disown "$bp" 2>/dev/null || true
+  local w=0
+  while kill -0 "$bp" 2>/dev/null; do
+    if [[ -s "$logf" ]]; then
+      break
+    fi
+    sleep 0.25
+    w=$((w + 1))
+    if [[ "$w" -gt 2400 ]]; then
+      break
+    fi
+  done
+  tvclaw_heartbeat_stop
   echo ""
   echo "nanoclaw: npm start is running (PID $bp). Log file: $logf"
   echo "Streaming logs below. Press Ctrl+C once to stop following and continue the installer; the brain keeps running."
@@ -468,7 +542,12 @@ apk_install_step() {
   else
     echo "Downloading TV APK from:"
     echo "  $TVCLAW_APK_URL"
-    if ! curl -fsSL -o "$apkip" "$TVCLAW_APK_URL"; then
+    if tvclaw_progress_should_show; then
+      if ! curl -fSL --progress-bar -o "$apkip" "$TVCLAW_APK_URL"; then
+        echo "Download failed. Build locally and re-run with TVCLAW_BUILD_ANDROID_APK=1, or copy an APK and set TVCLAW_LOCAL_APK." >&2
+        return 1
+      fi
+    elif ! curl -fsSL -o "$apkip" "$TVCLAW_APK_URL"; then
       echo "Download failed. Build locally and re-run with TVCLAW_BUILD_ANDROID_APK=1, or copy an APK and set TVCLAW_LOCAL_APK." >&2
       return 1
     fi
@@ -479,8 +558,7 @@ apk_install_step() {
   if command -v adb >/dev/null 2>&1; then
     adb start-server >/dev/null 2>&1 || true
     if [[ -n "${TVCLAW_ADB_IP:-}" ]]; then
-      adb connect "${TVCLAW_ADB_IP}:5555" 2>/dev/null || true
-      sleep 2
+      tvclaw_busy "adb connect ${TVCLAW_ADB_IP}:5555 (waiting for device)…" bash -c "adb connect \"${TVCLAW_ADB_IP}:5555\" 2>/dev/null || true; exec sleep 2"
     fi
     if adb_has_ready_device && try_adb_install_apk "$apkip"; then
       whatsapp_apk_followup "" "" "1"
@@ -715,6 +793,7 @@ main() {
   export TVCLAW_INSTALLER=1
   TVCLAW_INSTALL_SHELL_SUCCESS=0
   tvclaw_install_exit_cleanup() {
+    tvclaw_heartbeat_stop
     if [[ "${TVCLAW_INSTALL_SHELL_SUCCESS:-0}" == "1" ]]; then
       return 0
     fi
@@ -750,19 +829,19 @@ main() {
   printf '%s\n' "$NANOCLAW_ROOT" >"$REPO_ROOT/.nanoclaw-root"
   echo "  Saved nanoclaw path to $REPO_ROOT/.nanoclaw-root (for logs later: tail -f \"\$(cat \"$REPO_ROOT/.nanoclaw-root\")/logs/nanoclaw.log\")"
   echo ""
-  ./setup.sh
-  npm run -s build 2>/dev/null || npm run build
+  tvclaw_busy "nanoclaw setup.sh…" ./setup.sh
+  tvclaw_busy "npm run build…" bash -c "npm run -s build 2>/dev/null || exec npm run build"
   local crt
   crt=$(container_runtime_flag)
   ensure_docker "$crt"
-  npx tsx setup/index.ts --step environment
-  npx tsx setup/index.ts --step timezone
-  npx tsx setup/index.ts --step mounts -- --empty
-  npx tsx setup/index.ts --step container -- --runtime "$crt"
+  tvclaw_busy "setup: environment…" npx tsx setup/index.ts --step environment
+  tvclaw_busy "setup: timezone…" npx tsx setup/index.ts --step timezone
+  tvclaw_busy "setup: mounts…" npx tsx setup/index.ts --step mounts -- --empty
+  tvclaw_busy "setup: container…" npx tsx setup/index.ts --step container -- --runtime "$crt"
   if [[ "${TVCLAW_SKIP_SERVICE:-1}" != "1" ]]; then
     echo ""
     echo "Installing launchd / systemd so the brain can stay running after you close this window…"
-    npx tsx setup/index.ts --step service || true
+    tvclaw_busy "setup: background service…" npx tsx setup/index.ts --step service || true
     if [[ "${TVCLAW_SETUP_UI:-1}" == "0" ]]; then
       echo ""
       echo "────────────────────────────────────────────────────────────"
@@ -783,12 +862,12 @@ main() {
       echo ""
     fi
   fi
-  npx tsx setup/index.ts --step verify
+  tvclaw_busy "setup: verify…" npx tsx setup/index.ts --step verify
   if [[ "${TVCLAW_SKIP_AUTH_AI:-}" != "1" ]]; then
     echo ""
     echo "  ··· Sign in to the AI helper (OneCLI) ···"
     echo ""
-    npm run auth:ai
+    tvclaw_busy "npm run auth:ai (follow prompts in this terminal)…" npm run auth:ai
   fi
   if [[ "${TVCLAW_SKIP_WHATSAPP:-}" != "1" ]]; then
     tvclaw_pause_background_brain_for_whatsapp
@@ -796,11 +875,11 @@ main() {
     echo "  ··· Link WhatsApp on your phone ···"
     echo ""
     if [[ "${TVCLAW_WA_BROWSER_QR:-}" == "1" ]]; then
-      npm run auth -- --browser-qr
+      tvclaw_busy "WhatsApp: auth (browser QR may open)…" npm run auth -- --browser-qr
     else
-      npm run auth
+      tvclaw_busy "WhatsApp: scan QR in terminal…" npm run auth
     fi
-    npm run link:whatsapp
+    tvclaw_busy "WhatsApp: link TVClaw group…" npm run link:whatsapp
   fi
   if [[ "${TVCLAW_SKIP_WHATSAPP:-}" == "1" ]]; then
     echo ""
