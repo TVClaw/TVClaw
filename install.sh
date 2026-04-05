@@ -416,14 +416,6 @@ primary_lan_ip() {
   esac
 }
 
-print_url_qr() {
-  local url="$1"
-  (cd "$NANOCLAW_ROOT" && node --input-type=module -e "
-    import q from 'qrcode-terminal';
-    q.generate(process.argv[1], { small: true });
-  " "$url") 2>/dev/null || echo "$url"
-}
-
 adb_has_ready_device() {
   adb devices 2>/dev/null | awk 'NR>1 && $2=="device" { found=1 } END { exit found ? 0 : 1 }'
 }
@@ -681,8 +673,6 @@ EOS
   echo "This server serves the APK at the address root (no path). No-cache headers apply so the TV browser is less likely to reuse an old download."
   echo "The served file is the same tvclaw.apk matching the version, size, and SHA256 printed above."
   echo ""
-  print_url_qr "$url"
-  echo ""
   echo "Type this on the TV browser (same Wi‑Fi):"
   echo "  $url"
   echo ""
@@ -813,7 +803,7 @@ main() {
 
   print_banner
   if [[ "$(uname -s)" == "Linux" ]] && [[ -f /proc/version ]] && grep -qiE 'microsoft|wsl' /proc/version; then
-    echo "You're on Windows Subsystem for Linux — plugging in a phone over USB can be fiddly; the Wi‑Fi QR for the TV app still works fine."
+    echo "You're on Windows Subsystem for Linux — plugging in a phone over USB can be fiddly; you can still install the TV app using the download URL this installer prints (same Wi‑Fi)."
   fi
   ensure_repo
   ensure_node
