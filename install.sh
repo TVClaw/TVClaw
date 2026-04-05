@@ -558,7 +558,7 @@ EOS
   echo ""
   print_url_qr "$url"
   echo ""
-  echo "Type this on the TV if the QR is awkward with the remote:"
+  echo "Type this on the TV:"
   echo "  $url"
   echo ""
   echo "If you use the brain’s /tvclaw-client.apk link instead, open the brain home page again after each Gradle build so the download URL refreshes (TV browsers often reuse an old APK)."
