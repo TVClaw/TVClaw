@@ -79,7 +79,7 @@ print_banner() {
     |_|      \/   \_____|______/_/    \_\/  \/    
                                                   
                                                   
-        🦞   TVClaw   📺
+        📺🦞TVClaw   
   ═══════════════════════════
     TV + Claw — personal TV brain
 

@@ -1,6 +1,18 @@
-# TVClaw
+<p align="center">
+  <img src="TVClaw/TvClaw_logo.png" alt="TVClaw — TV and lobster mascot" width="360">
+</p>
 
-TV + Claw: a small stack to run the TVClaw brain (NanoClaw) on your machine, talk to it from WhatsApp, and sideload the Android client.
+<h1 align="center">TVClaw 📺🦞</h1>
+
+<p align="center">
+  <strong>TV</strong> meets <strong>claw</strong>: chat from WhatsApp/Telegram(soon) 💬, run the brain on your machine 🖥️, and drive the big screen with the Android TV/Apple TV(soon) 📺.
+</p>
+
+<p align="center">
+  If this project is useful to you, please <a href="https://github.com/TVClaw/TVClaw">star ⭐️ the repo on GitHub</a> — it helps others discover it and keeps momentum up.
+</p>
+
+---
 
 ## One-line install (macOS / Linux)
 
@@ -8,75 +20,98 @@ TV + Claw: a small stack to run the TVClaw brain (NanoClaw) on your machine, tal
 curl -fsSL https://raw.githubusercontent.com/TVClaw/TVClaw/main/install.sh | bash
 ```
 
-Already cloned this repo? From the repository root:
+Already cloned? From the **repository root**:
 
 ```bash
 bash install.sh
 ```
 
-Windows: use **WSL2** and run the same `curl` line inside Ubuntu on WSL.
+**Windows:** use **WSL2** and run the same `curl` line inside Ubuntu on WSL.
 
-The installer:
+### What the installer does 🛠️
 
-- Bootstraps **Node.js 20+** (Homebrew on macOS if you allow it)
-- Installs **nanoclaw** dependencies, builds TypeScript, builds the **agent container** (Docker on Linux and typical macOS setups; Apple Container only if your tree uses it and the `container` CLI is present)
-- Runs setup steps (timezone, mounts, container, optional background service, verify)
-- Installs **OneCLI** and asks for your **Anthropic API key**
-- Walks through **WhatsApp** (QR in the terminal; optional large QR in the browser) and **TVClaw** group registration
-- Tries **ADB install** for the Android APK, or serves the APK on your LAN and prints a **QR code** so you do not type a URL
-- Links `tvclaw` into `~/.local/bin` and opens the GitHub page so you can **star** the repo: [github.com/TVClaw/TVClaw](https://github.com/TVClaw/TVClaw)
+- Sets up **Node.js 20+** (Homebrew on macOS when you allow it)
+- Installs **NanoClaw** dependencies, builds TypeScript, and builds the **agent container** (Docker on typical macOS/Linux setups)
+- Runs guided setup (timezone, mounts, container, optional background service, sanity checks)
+- Helps you connect **OneCLI** and your **AI** credentials 🔑
+- Walks through **WhatsApp** (QR in the terminal, optional browser QR) and **TVClaw** group setup
+- Helps get the **Android APK** onto your TV (ADB or a LAN URL you can open from the TV)
+- Adds the **`tvclaw`** CLI under `~/.local/bin` and opens the GitHub page so you can **star** the project ⭐️
 
-### Environment variables (optional)
+---
 
-| Variable | Purpose |
-|----------|---------|
-| `TVCLAW_REPO_ROOT` | Use an existing checkout (skip clone detection) |
-| `TVCLAW_SKIP_CLONE` | Fail if not already in a repo instead of cloning to `~/TVClaw` |
-| `TVCLAW_CLONE_DIR` | Clone destination (default `~/TVClaw`) |
-| `TVCLAW_SKIP_AUTH_AI` | Skip OneCLI / Anthropic step |
-| `TVCLAW_SKIP_WHATSAPP` | Skip WhatsApp auth and group link |
-| `TVCLAW_SKIP_APK` | Skip Android APK download / sideload helper |
-| `TVCLAW_SKIP_SERVICE` | Skip background auto-start |
-| `TVCLAW_WA_BROWSER_QR=1` | Also open one browser tab with a large WhatsApp QR (default: terminal only) |
-| `TVCLAW_MACOS_NOTIFY=1` | macOS only: show a desktop banner when WhatsApp needs re-linking (default: off) |
-| `TVCLAW_SETUP_UI=0` | Verbose setup blocks and full logs (default: short, friendly installer output) |
-| `TVCLAW_APK_URL` | Override APK download URL |
-| `TVCLAW_ADB_IP` | Optional: TV IP for `adb connect …:5555` before APK install |
+## Architecture (sketch) 🗺️
 
-### macOS: notifications or TVClaw still running after you stop the installer
+Roughly how the pieces fit together — your phone talks to the brain; the brain talks to sandboxed agents and to the TV over the LAN.
 
-Repeated **TVClaw** banners usually mean the **brain process** is still running in the background (for example the login item installed during setup). It is trying to use WhatsApp and asking you to scan a QR again. **Desktop alerts from TVClaw are off by default** in current versions; if you enabled them with `TVCLAW_MACOS_NOTIFY=1`, set that variable off or update to the latest code.
+```mermaid
+flowchart TB
+  subgraph phone["📱 Your phone"]
+    WA["💬 WhatsApp"]
+  end
 
-To stop the background app until you want it:
+  subgraph host["🖥️ Your computer — TVClaw / NanoClaw brain"]
+    CORE["Orchestrator & channels"]
+    TVB["📡 TV bridge (WebSocket client)"]
+    subgraph agents["🧰 Agent side"]
+      IPC["IPC with runner"]
+      MCP["MCP-style tools"]
+    end
+  end
 
-```bash
-launchctl unload "$HOME/Library/LaunchAgents/com.nanoclaw.plist" 2>/dev/null || true
+  subgraph sandbox["🐳 Isolated agent container"]
+    LLM["☁️ Claude / agent runtime"]
+  end
+
+  subgraph tv["📺 Android TV (TVClaw app)"]
+    WSS["WebSocket server + mDNS"]
+    AX["Accessibility / TV control"]
+  end
+
+  WA <-->|"you chat, assistant replies"| CORE
+  CORE <-->|"spawn, mounts, jobs"| LLM
+  LLM -.->|"skills & tool calls"| IPC
+  IPC --- MCP
+  CORE --> TVB
+  TVB <-->|"LAN discovery & commands"| WSS
+  WSS --> AX
 ```
 
-Also quit any Terminal window where you ran `tvclaw start` or `npm start`, and optionally **Docker Desktop** if you do not need it.
+---
 
-### After install
+## Repository layout 📂
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-tvclaw start
-```
+- **`nanoclaw2/`** — gateway (WhatsApp, agents, OneCLI); details in [nanoclaw2/README.md](nanoclaw2/README.md)
+- **`TVClaw/apps/client-android/`** — Android TV / phone **TVClaw** client 📺
 
-Or: `cd nanoclaw2 && npm start`. Logs: `nanoclaw2/logs/nanoclaw.log`.
+---
 
-### WhatsApp setup looks scary — what do the messages mean?
+## Collaboration wanted 🤝
 
-The installer pauses the background brain while you link WhatsApp so only one process uses the session. If you still see **`conflict` / `replaced`**, something else (another Terminal, an old `npm start`) is using the same `nanoclaw2/store/auth` — stop it and run `npm run auth` / `npm run link:whatsapp` again. **`515`** is usually a short reconnect; **`MessageCounterError` / old counters** often mean split or stale keys: stop every TVClaw process, then `rm -rf nanoclaw2/store/auth` and link WhatsApp again from a single window.
+TVClaw is better with more eyes and more rooms. We’d love help with:
 
-### Android APK
+- **Real-world testing** on different Android TV devices and network setups 🏠
+- **Issues and ideas** — rough edges in install, UX, and docs ✏️
+- **Skills** — patterns that plug into NanoClaw-style workflows (channels, container skills, tooling)
+- **Clarity** — making the “happy path” obvious for people who’ve never touched ADB or WhatsApp linking
 
-By default `install.sh` uses **`prebuilt/tvclaw-android.apk`** if it exists in the clone, otherwise **downloads** from **`TVCLAW_APK_URL`** (GitHub raw on `main` by default), then serves that file to the TV.
+If you’re not sure where to start, open a discussion or issue on GitHub and say hi 👋
 
-Local development build: **`TVCLAW_BUILD_ANDROID_APK=1 bash install.sh`** (needs **JDK 17+** and **Android SDK** / **`ANDROID_HOME`**). Or set **`TVCLAW_LOCAL_APK`** to an existing APK path.
+---
 
-On every push to **`main`**, [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml) builds and may commit **`prebuilt/tvclaw-android.apk`** (`[skip ci]` avoids an infinite loop).
+## Upcoming work 🔭
 
-### Repository layout
+Directions we’re excited about (no fixed timeline — watch the repo and **star ⭐️** it to follow along):
 
-- `nanoclaw2/` — gateway (WhatsApp, agents, OneCLI); see [nanoclaw2/README.md](nanoclaw2/README.md)
-- `TVClaw/apps/client-android/` — Android TV / phone client
+| Theme | Ideas |
+|-------|--------|
+| **More screens** | **Apple TV** support 🍎📺 |
+| **Models** | **Local** open models (e.g. Gemma, Llama-class) 🦙 and **hosted** APIs (e.g. GPT, Gemini) 🤖 |
+| **More chat apps** | **Telegram** and other messengers ✈️ |
+| **Ecosystem** | **Future skills**, richer TV automation, smoother onboarding 🦞 |
+
+---
+
+<p align="center">
+  <a href="https://github.com/TVClaw/TVClaw"><strong>TVClaw on GitHub</strong></a> — if you’re here anyway, tap ⭐️ <strong>Star</strong> and ride along.
+</p>
