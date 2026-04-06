@@ -466,6 +466,10 @@ try_adb_install_apk() {
 
 whatsapp_apk_followup() {
   [[ "${TVCLAW_SKIP_WHATSAPP:-}" == "1" ]] && return 0
+  if [[ -n "${NANOCLAW_ROOT:-}" ]] && command -v pkill >/dev/null 2>&1; then
+    pkill -f "${NANOCLAW_ROOT}/dist/index\\.js" 2>/dev/null || true
+    sleep 1
+  fi
   TVCLAW_APK_HTTP_URL="${1:-}" TVCLAW_APK_FILE_PATH="${2:-}" TVCLAW_APK_INSTALLED_VIA_ADB="${3:-}" \
     tvclaw_busy "WhatsApp: posting TV app instructions…" bash -c 'cd "$1" && npx tsx src/whatsapp-apk-followup.ts' _ "$NANOCLAW_ROOT" || true
 }
