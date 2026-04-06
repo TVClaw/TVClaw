@@ -269,7 +269,7 @@ clone_repo() {
 }
 
 ensure_repo() {
-  local rr
+  builtin local rr
   if rr=$(detect_repo_root 2>/dev/null); then
     REPO_ROOT=$rr
     echo "Using this TVClaw folder: $REPO_ROOT"
@@ -278,17 +278,12 @@ ensure_repo() {
       echo "Not inside TVClaw repo and TVCLAW_SKIP_CLONE=1 — set TVCLAW_REPO_ROOT or run from clone." >&2
       exit 1
     fi
-    local clone_root default_clone
-    default_clone="${HOME:-$(cd ~ && pwd)}/TVClaw"
-    if [[ -n "${TVCLAW_CLONE_DIR:-}" ]]; then
-      clone_root="$TVCLAW_CLONE_DIR"
-    else
-      clone_root="$default_clone"
-    fi
-    echo "Downloading TVClaw to $clone_root…"
-    mkdir -p "$(dirname "$clone_root")"
-    clone_repo "$clone_root"
-    REPO_ROOT="$clone_root"
+    builtin local _tvclaw_clone_dest="${HOME:-$(cd ~ && pwd)}/TVClaw"
+    [[ -n "${TVCLAW_CLONE_DIR:-}" ]] && _tvclaw_clone_dest="$TVCLAW_CLONE_DIR"
+    echo "Downloading TVClaw to $_tvclaw_clone_dest…"
+    mkdir -p "$(dirname "$_tvclaw_clone_dest")"
+    clone_repo "$_tvclaw_clone_dest"
+    REPO_ROOT="$_tvclaw_clone_dest"
   fi
   if ! NANOCLAW_ROOT=$(resolve_nanoclaw_root "$REPO_ROOT"); then
     echo "nanoclaw2/setup.sh not found under $REPO_ROOT" >&2
