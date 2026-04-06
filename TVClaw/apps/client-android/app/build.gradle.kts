@@ -17,7 +17,7 @@ val tvClawBrainHttpUrl =
 
 val tvClawUpdateApkUrl =
     localProperties.getProperty("tvclaw.update.apk.url")?.trim()?.takeIf { it.isNotEmpty() }
-        ?: "https://raw.githubusercontent.com/TVClaw/TVClaw/HEAD/prebuilt/tvclaw-android.apk"
+        ?: "https://raw.githubusercontent.com/TVClaw/TVClaw/main/prebuilt/tvclaw-android.apk"
 
 android {
     namespace = "com.tvclaw.client"

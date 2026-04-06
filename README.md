@@ -17,7 +17,7 @@
 ## One-line install (macOS / Linux)
 
 ```bash
-curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main | bash
+curl -fsSL https://cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh | bash
 ```
 
 Already cloned? From the **repository root**:
