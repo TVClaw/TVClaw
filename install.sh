@@ -11,7 +11,9 @@ tty_read() {
   fi
 }
 
-TVCLAW_CLONE_DIR="${TVCLAW_CLONE_DIR:-${HOME:-$(cd ~ && pwd)}/TVClaw}"
+if [[ -z "${TVCLAW_CLONE_DIR:-}" ]]; then
+  TVCLAW_CLONE_DIR="${HOME:-$(cd ~ && pwd)}/TVClaw"
+fi
 TVCLAW_SKIP_SERVICE="${TVCLAW_SKIP_SERVICE:-1}"
 TVCLAW_REPO_URL="${TVCLAW_REPO_URL:-https://github.com/TVClaw/TVClaw.git}"
 TVCLAW_APK_URL="${TVCLAW_APK_URL:-https://raw.githubusercontent.com/TVClaw/TVClaw/main/prebuilt/tvclaw-android.apk}"
@@ -276,8 +278,13 @@ ensure_repo() {
       echo "Not inside TVClaw repo and TVCLAW_SKIP_CLONE=1 — set TVCLAW_REPO_ROOT or run from clone." >&2
       exit 1
     fi
-    local clone_root
-    clone_root="${TVCLAW_CLONE_DIR:-${HOME:-$(cd ~ && pwd)}/TVClaw}"
+    local clone_root default_clone
+    default_clone="${HOME:-$(cd ~ && pwd)}/TVClaw"
+    if [[ -n "${TVCLAW_CLONE_DIR:-}" ]]; then
+      clone_root="$TVCLAW_CLONE_DIR"
+    else
+      clone_root="$default_clone"
+    fi
     echo "Downloading TVClaw to $clone_root…"
     mkdir -p "$(dirname "$clone_root")"
     clone_repo "$clone_root"
