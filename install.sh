@@ -16,7 +16,7 @@ if [[ -z "${TVCLAW_CLONE_DIR:-}" ]]; then
 fi
 TVCLAW_SKIP_SERVICE="${TVCLAW_SKIP_SERVICE:-1}"
 TVCLAW_REPO_URL="${TVCLAW_REPO_URL:-https://github.com/TVClaw/TVClaw.git}"
-TVCLAW_APK_URL="${TVCLAW_APK_URL:-https://raw.githubusercontent.com/TVClaw/TVClaw/main/prebuilt/tvclaw-android.apk}"
+TVCLAW_APK_URL="${TVCLAW_APK_URL:-https://raw.githubusercontent.com/TVClaw/TVClaw/HEAD/prebuilt/tvclaw-android.apk}"
 STAR_URL="https://github.com/TVClaw/TVClaw"
 
 TVCLAW_PROGRESS_BG_PID=""
@@ -89,8 +89,8 @@ EOF
 }
 
 usage() {
-  echo "usage: curl -fsSL .../install.sh | bash   (prompts use /dev/tty)"
-  echo "   or: curl -fsSL .../install.sh -o install.sh && bash install.sh"
+  echo "usage: curl -fsSL https://raw.githubusercontent.com/TVClaw/TVClaw/HEAD/install.sh | bash   (prompts use /dev/tty)"
+  echo "   or: curl -fsSL https://raw.githubusercontent.com/TVClaw/TVClaw/HEAD/install.sh -o install.sh && bash install.sh"
   echo "   or: bash install.sh"
   echo "env: TVCLAW_SKIP_CLONE=1 TVCLAW_REPO_ROOT=/path TVCLAW_SKIP_AUTH_AI=1 TVCLAW_SKIP_WHATSAPP=1 TVCLAW_SKIP_APK=1 TVCLAW_SKIP_SERVICE=0 TVCLAW_WA_BROWSER_QR=1"
   echo "     (background launchd/systemd is off by default; set TVCLAW_SKIP_SERVICE=0 to install it)"
