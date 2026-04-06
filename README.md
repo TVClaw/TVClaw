@@ -53,10 +53,8 @@ flowchart TB
   subgraph host["🖥️ Your computer — TVClaw / NanoClaw brain"]
     CORE["Orchestrator & channels"]
     TVB["📡 TV bridge (WebSocket client)"]
-    subgraph agents["🧰 Agent side"]
-      IPC["IPC with runner"]
-      MCP["MCP-style tools"]
-    end
+    IPC["IPC with runner"]
+    MCP["MCP-style tools"]
   end
 
   subgraph sandbox["🐳 Isolated agent container"]
@@ -68,12 +66,12 @@ flowchart TB
     AX["Accessibility / TV control"]
   end
 
-  WA <-->|"you chat, assistant replies"| CORE
-  CORE <-->|"spawn, mounts, jobs"| LLM
-  LLM -.->|"skills & tool calls"| IPC
+  WA -->|chat| CORE
+  CORE -->|spawn / jobs| LLM
+  LLM -.->|tools| IPC
   IPC --- MCP
   CORE --> TVB
-  TVB <-->|"LAN discovery & commands"| WSS
+  TVB <--> WSS
   WSS --> AX
 ```
 
