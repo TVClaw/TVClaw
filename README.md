@@ -17,10 +17,12 @@
 ## One-line install (macOS / Linux)
 
 ```bash
-curl -fsSL -H 'Accept: application/vnd.github.raw' 'https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main' | bash
+curl -fsSL -H 'Accept: application/vnd.github.raw' 'https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main' -o /tmp/tvclaw-install.sh && bash /tmp/tvclaw-install.sh
 ```
 
-This hits GitHub directly so you always get the commit `main` points at. `cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh` can stay on an older snapshot for a long time; purging jsDelivr only clears their CDN layer, not necessarily that snapshot.
+Saving the script first avoids piping problems (some shells or `pipefail` settings) and makes GitHub errors visible instead of feeding JSON into Bash. You can use `| bash` instead if you prefer. `cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh` can lag behind GitHub.
+
+Requirements: **Docker running**, **Node 20+** (the installer can install Node on macOS with Homebrew), **git**.
 
 Already cloned? From the **repository root**:
 

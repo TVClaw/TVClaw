@@ -92,8 +92,8 @@ EOF
 }
 
 usage() {
-  echo "usage: curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main | bash   (prompts use /dev/tty)"
-  echo "   or: curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main -o install.sh && bash install.sh"
+  echo "usage: curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main -o /tmp/tvclaw-install.sh && bash /tmp/tvclaw-install.sh   (recommended; prompts use /dev/tty)"
+  echo "   or: curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main | bash"
   echo "   or: curl -fsSL https://cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh | bash   (may lag behind GitHub)"
   echo "   or: bash install.sh"
   echo "env: TVCLAW_SKIP_CLONE=1 TVCLAW_REPO_ROOT=/path TVCLAW_SKIP_AUTH_AI=1 TVCLAW_SKIP_WHATSAPP=1 TVCLAW_SKIP_APK=1 TVCLAW_SKIP_SERVICE=0 TVCLAW_WA_BROWSER_QR=1"
@@ -272,6 +272,18 @@ clone_repo() {
   fi
 }
 
+tvclaw_upgrade_nanoclaw2_if_stale() {
+  local root="$1"
+  local v="$root/nanoclaw2/setup/verify.ts"
+  local nc="$root/nanoclaw2"
+  [[ -d "$nc/.git" && -f "$v" ]] || return 0
+  grep -q "TVCLAW_INSTALLER === '1'" "$v" 2>/dev/null && return 0
+  echo "Refreshing nanoclaw2 — this checkout would fail setup verify before the AI / WhatsApp steps." >&2
+  tvclaw_busy "git: nanoclaw2 @ origin/main (TVClaw installer)…" bash -c "git -C \"\$1\" fetch --depth 1 origin main && exec git -C \"\$1\" checkout -q FETCH_HEAD" _ "$nc" || {
+    echo "Could not refresh nanoclaw2 (network?). Run: cd \"$nc\" && git fetch origin main && git checkout FETCH_HEAD" >&2
+  }
+}
+
 ensure_repo() {
   unset REPO_ROOT 2>/dev/null || true
   REPO_ROOT=""
@@ -292,6 +304,7 @@ ensure_repo() {
     clone_repo "$_tvclaw_install_dest"
     REPO_ROOT="$_tvclaw_install_dest"
   fi
+  tvclaw_upgrade_nanoclaw2_if_stale "$REPO_ROOT"
   if ! NANOCLAW_ROOT=$(resolve_nanoclaw_root "$REPO_ROOT"); then
     echo "nanoclaw2/setup.sh not found under $REPO_ROOT" >&2
     exit 1
@@ -914,7 +927,7 @@ main() {
   echo "  • From repo root: cd \"\$(cat \"$REPO_ROOT/.nanoclaw-root\")\" && npm start"
   echo ""
   TVCLAW_INSTALL_SHELL_SUCCESS=1
-  star_repo
+  star_repo || true
 }
 
 main "$@"
