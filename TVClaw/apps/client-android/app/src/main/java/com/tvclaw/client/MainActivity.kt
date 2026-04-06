@@ -22,6 +22,7 @@ import androidx.core.content.FileProvider
 import com.tvclaw.client.databinding.ActivityMainBinding
 import java.io.File
 import java.io.IOException
+import java.net.URLEncoder
 import kotlin.concurrent.thread
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -116,8 +117,9 @@ class MainActivity : AppCompatActivity() {
                     if (apkUrl.isEmpty()) {
                         throw IOException("empty TVCLAW_UPDATE_APK_URL")
                     }
+                    val url = latestApkDownloadUrl(apkUrl)
                     val out = File(cacheDir, "tvclaw-update.apk")
-                    downloadToFile(apkUrl, out)
+                    downloadToFile(url, out)
                     val uri = FileProvider.getUriForFile(
                         this,
                         "${BuildConfig.APPLICATION_ID}.fileprovider",
@@ -223,7 +225,7 @@ class MainActivity : AppCompatActivity() {
         binding.progressConnect.visibility = View.GONE
         binding.statusText.text = getString(R.string.bridge_connect_failed, msg)
         binding.retryBridge.visibility = View.VISIBLE
-        binding.updateApp.visibility = View.GONE
+        binding.updateApp.visibility = View.VISIBLE
         binding.testConnection.visibility = View.GONE
     }
 
@@ -231,13 +233,58 @@ class MainActivity : AppCompatActivity() {
         binding.progressConnect.visibility = View.GONE
         binding.statusText.setText(R.string.status_bridge_stopped)
         binding.retryBridge.visibility = View.VISIBLE
-        binding.updateApp.visibility = View.GONE
+        binding.updateApp.visibility = View.VISIBLE
         binding.testConnection.visibility = View.GONE
+    }
+
+    private fun cacheBustUrlForApk(apkUrl: String): String {
+        val bare = apkUrl.substringBefore('?')
+        val slash = bare.lastIndexOf('/')
+        if (slash < 0) {
+            return bare
+        }
+        return bare.substring(0, slash + 1) + "apk-cache-bust.txt"
+    }
+
+    private fun downloadTextNoCache(url: String): String {
+        val client = OkHttpClient()
+        val req = Request.Builder()
+            .url(url)
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
+            .build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                throw IOException("HTTP ${resp.code}")
+            }
+            return (resp.body ?: throw IOException("empty body")).string()
+        }
+    }
+
+    private fun latestApkDownloadUrl(apkUrl: String): String {
+        val bustSource = cacheBustUrlForApk(apkUrl)
+        val bust = try {
+            downloadTextNoCache(bustSource).trim()
+        } catch (_: Exception) {
+            ""
+        }
+        val token = if (bust.isNotEmpty()) {
+            bust
+        } else {
+            System.currentTimeMillis().toString()
+        }
+        val enc = URLEncoder.encode(token, Charsets.UTF_8.name())
+        val sep = if (apkUrl.contains("?")) "&" else "?"
+        return "$apkUrl${sep}tvclaw_cb=$enc"
     }
 
     private fun downloadToFile(url: String, out: File) {
         val client = OkHttpClient()
-        val req = Request.Builder().url(url).build()
+        val req = Request.Builder()
+            .url(url)
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
+            .build()
         client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) {
                 throw IOException("HTTP ${resp.code}")

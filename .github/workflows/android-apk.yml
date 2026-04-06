@@ -3,8 +3,9 @@ name: Android APK
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "prebuilt/tvclaw-android.apk"
+    paths:
+      - "TVClaw/apps/client-android/**"
+      - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
 permissions:
@@ -35,10 +36,18 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdir -p prebuilt
           cp TVClaw/apps/client-android/app/build/outputs/apk/debug/app-debug.apk prebuilt/tvclaw-android.apk
-          git add prebuilt/tvclaw-android.apk
+          echo "${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" > prebuilt/apk-cache-bust.txt
+          git add prebuilt/tvclaw-android.apk prebuilt/apk-cache-bust.txt
           if git diff --staged --quiet; then
             echo "APK unchanged, nothing to commit."
           else
             git commit -m "chore(prebuilt): update tvclaw-android.apk [skip ci]"
             git push
           fi
+      - name: Purge jsDelivr mirror (helps TVs see fresh APK sooner)
+        if: success()
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          curl -sS -m 30 -X POST "https://purge.jsdelivr.net/gh/${REPO}@main/prebuilt/tvclaw-android.apk" || true
+          curl -sS -m 30 -X POST "https://purge.jsdelivr.net/gh/${REPO}@main/prebuilt/apk-cache-bust.txt" || true
