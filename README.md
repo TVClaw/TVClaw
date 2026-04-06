@@ -17,8 +17,10 @@
 ## One-line install (macOS / Linux)
 
 ```bash
-curl -fsSL https://cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh | bash
+curl -fsSL -H 'Accept: application/vnd.github.raw' 'https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main' | bash
 ```
+
+This hits GitHub directly so you always get the commit `main` points at. `cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh` can stay on an older snapshot for a long time; purging jsDelivr only clears their CDN layer, not necessarily that snapshot.
 
 Already cloned? From the **repository root**:
 

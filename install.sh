@@ -89,8 +89,9 @@ EOF
 }
 
 usage() {
-  echo "usage: curl -fsSL https://cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh | bash   (prompts use /dev/tty)"
-  echo "   or: curl -fsSL https://cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh -o install.sh && bash install.sh"
+  echo "usage: curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main | bash   (prompts use /dev/tty)"
+  echo "   or: curl -fsSL -H 'Accept: application/vnd.github.raw' https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main -o install.sh && bash install.sh"
+  echo "   or: curl -fsSL https://cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh | bash   (may lag behind GitHub)"
   echo "   or: bash install.sh"
   echo "env: TVCLAW_SKIP_CLONE=1 TVCLAW_REPO_ROOT=/path TVCLAW_SKIP_AUTH_AI=1 TVCLAW_SKIP_WHATSAPP=1 TVCLAW_SKIP_APK=1 TVCLAW_SKIP_SERVICE=0 TVCLAW_WA_BROWSER_QR=1"
   echo "     (background launchd/systemd is off by default; set TVCLAW_SKIP_SERVICE=0 to install it)"
