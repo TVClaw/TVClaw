@@ -11,7 +11,7 @@ tty_read() {
   fi
 }
 
-TVCLAW_CLONE_DIR="${TVCLAW_CLONE_DIR:-$HOME/TVClaw}"
+TVCLAW_CLONE_DIR="${TVCLAW_CLONE_DIR:-${HOME:-$(cd ~ && pwd)}/TVClaw}"
 TVCLAW_SKIP_SERVICE="${TVCLAW_SKIP_SERVICE:-1}"
 TVCLAW_REPO_URL="${TVCLAW_REPO_URL:-https://github.com/TVClaw/TVClaw.git}"
 TVCLAW_APK_URL="${TVCLAW_APK_URL:-https://raw.githubusercontent.com/TVClaw/TVClaw/main/prebuilt/tvclaw-android.apk}"
@@ -276,10 +276,12 @@ ensure_repo() {
       echo "Not inside TVClaw repo and TVCLAW_SKIP_CLONE=1 — set TVCLAW_REPO_ROOT or run from clone." >&2
       exit 1
     fi
-    echo "Downloading TVClaw to $TVCLAW_CLONE_DIR…"
-    mkdir -p "$(dirname "$TVCLAW_CLONE_DIR")"
-    clone_repo "$TVCLAW_CLONE_DIR"
-    REPO_ROOT="$TVCLAW_CLONE_DIR"
+    local clone_root
+    clone_root="${TVCLAW_CLONE_DIR:-${HOME:-$(cd ~ && pwd)}/TVClaw}"
+    echo "Downloading TVClaw to $clone_root…"
+    mkdir -p "$(dirname "$clone_root")"
+    clone_repo "$clone_root"
+    REPO_ROOT="$clone_root"
   fi
   if ! NANOCLAW_ROOT=$(resolve_nanoclaw_root "$REPO_ROOT"); then
     echo "nanoclaw2/setup.sh not found under $REPO_ROOT" >&2
