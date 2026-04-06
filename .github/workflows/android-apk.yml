@@ -49,5 +49,5 @@ jobs:
         env:
           REPO: ${{ github.repository }}
         run: |
-          curl -sS -m 30 -X POST "https://purge.jsdelivr.net/gh/${REPO}@main/prebuilt/tvclaw-android.apk" || true
-          curl -sS -m 30 -X POST "https://purge.jsdelivr.net/gh/${REPO}@main/prebuilt/apk-cache-bust.txt" || true
+          curl -sS -m 30 "https://purge.jsdelivr.net/gh/${REPO}@main/prebuilt/tvclaw-android.apk" || true
+          curl -sS -m 30 "https://purge.jsdelivr.net/gh/${REPO}@main/prebuilt/apk-cache-bust.txt" || true
