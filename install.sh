@@ -299,7 +299,7 @@ ensure_repo() {
     if [[ -n "${TVCLAW_CLONE_DIR:-}" ]]; then
       _tvclaw_install_dest="$TVCLAW_CLONE_DIR"
     fi
-    echo "Downloading TVClaw to $_tvclaw_install_dest…"
+    echo "Downloading TVClaw to ${_tvclaw_install_dest}…"
     mkdir -p "$(dirname "$_tvclaw_install_dest")"
     clone_repo "$_tvclaw_install_dest"
     REPO_ROOT="$_tvclaw_install_dest"
