@@ -270,6 +270,7 @@ clone_repo() {
 }
 
 ensure_repo() {
+  unset REPO_ROOT 2>/dev/null || true
   if rr=$(detect_repo_root 2>/dev/null); then
     REPO_ROOT=$rr
     echo "Using this TVClaw folder: $REPO_ROOT"
@@ -279,7 +280,9 @@ ensure_repo() {
       exit 1
     fi
     REPO_ROOT="${HOME:-$(cd ~ && pwd)}/TVClaw"
-    [[ -n "${TVCLAW_CLONE_DIR:-}" ]] && REPO_ROOT="$TVCLAW_CLONE_DIR"
+    if [[ -n "${TVCLAW_CLONE_DIR:-}" ]]; then
+      REPO_ROOT="$TVCLAW_CLONE_DIR"
+    fi
     echo "Downloading TVClaw to $REPO_ROOT…"
     mkdir -p "$(dirname "$REPO_ROOT")"
     clone_repo "$REPO_ROOT"
