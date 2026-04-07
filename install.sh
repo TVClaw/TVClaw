@@ -887,9 +887,9 @@ main() {
   tvclaw_busy "setup: verify…" npx tsx setup/index.ts --step verify
   if [[ "${TVCLAW_SKIP_AUTH_AI:-}" != "1" ]]; then
     echo ""
-    echo "  ··· Sign in to the AI helper (OneCLI) ···"
+    echo "  ··· Connect Claude (API key stays on this computer; you may be asked to sign in once) ···"
     echo ""
-    tvclaw_busy "npm run auth:ai (follow prompts in this terminal)…" npm run auth:ai
+    npm run auth:ai
   fi
   if [[ "${TVCLAW_SKIP_WHATSAPP:-}" != "1" ]]; then
     tvclaw_pause_background_brain_for_whatsapp
