@@ -15,6 +15,7 @@ if [[ -z "${TVCLAW_CLONE_DIR:-}" ]]; then
   TVCLAW_CLONE_DIR="${HOME:-$(cd ~ && pwd)}/TVClaw"
 fi
 TVCLAW_SKIP_SERVICE="${TVCLAW_SKIP_SERVICE:-1}"
+TVCLAW_PIN_NANOCLAW2="${TVCLAW_PIN_NANOCLAW2:-0}"
 TVCLAW_REPO_URL="${TVCLAW_REPO_URL:-https://github.com/TVClaw/TVClaw.git}"
 TVCLAW_APK_URL="${TVCLAW_APK_URL:-https://raw.githubusercontent.com/TVClaw/TVClaw/main/prebuilt/tvclaw-android.apk}"
 STAR_URL="https://github.com/TVClaw/TVClaw"
@@ -100,6 +101,7 @@ usage() {
   echo "     (background launchd/systemd is off by default; set TVCLAW_SKIP_SERVICE=0 to install it)"
   echo "     TVCLAW_SETUP_UI=0 TVCLAW_INSTALLER=0 — verbose setup logs for debugging"
   echo "     TVCLAW_NO_PROGRESS=1 — disable animated 🦞/📺 progress on stderr"
+  echo "     TVCLAW_PIN_NANOCLAW2=1 — use TVClaw's git submodule revision for nanoclaw2 (no fetch of origin/main)"
   echo "     TVCLAW_WA_BROWSER_QR=1 opens one browser tab with a large QR; default is terminal-only QR"
   echo "     TVCLAW_ADB_IP=192.168.x.x — optional adb connect; TVCLAW_SKIP_WHATSAPP=1 skips WhatsApp steps and group messages"
   echo "     TVCLAW_LOCAL_APK=/path/to.apk — use this exact APK (skips download and Gradle)"
@@ -272,15 +274,17 @@ clone_repo() {
   fi
 }
 
-tvclaw_upgrade_nanoclaw2_if_stale() {
+tvclaw_sync_nanoclaw2_to_main() {
   local root="$1"
-  local v="$root/nanoclaw2/setup/verify.ts"
   local nc="$root/nanoclaw2"
-  [[ -d "$nc/.git" && -f "$v" ]] || return 0
-  grep -q "TVCLAW_INSTALLER === '1'" "$v" 2>/dev/null && return 0
-  echo "Refreshing nanoclaw2 — this checkout would fail setup verify before the AI / WhatsApp steps." >&2
-  tvclaw_busy "git: nanoclaw2 @ origin/main (TVClaw installer)…" bash -c "git -C \"\$1\" fetch --depth 1 origin main && exec git -C \"\$1\" checkout -q FETCH_HEAD" _ "$nc" || {
-    echo "Could not refresh nanoclaw2 (network?). Run: cd \"$nc\" && git fetch origin main && git checkout FETCH_HEAD" >&2
+  [[ "${TVCLAW_PIN_NANOCLAW2}" == "1" ]] && return 0
+  [[ -f "$nc/setup.sh" ]] || return 0
+  if ! git -C "$nc" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "Syncing nanoclaw2 to origin/main (latest)…"
+  tvclaw_busy "git: nanoclaw2 @ origin/main…" bash -c 'git -C "$1" fetch --depth 1 origin main && git -C "$1" checkout -q FETCH_HEAD' _ "$nc" || {
+    echo "Could not sync nanoclaw2 to origin/main (network?). Using the revision from this TVClaw checkout." >&2
   }
 }
 
@@ -304,7 +308,7 @@ ensure_repo() {
     clone_repo "$_tvclaw_install_dest"
     REPO_ROOT="$_tvclaw_install_dest"
   fi
-  tvclaw_upgrade_nanoclaw2_if_stale "$REPO_ROOT"
+  tvclaw_sync_nanoclaw2_to_main "$REPO_ROOT"
   if ! NANOCLAW_ROOT=$(resolve_nanoclaw_root "$REPO_ROOT"); then
     echo "nanoclaw2/setup.sh not found under $REPO_ROOT" >&2
     exit 1
