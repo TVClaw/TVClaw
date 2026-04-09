@@ -42,6 +42,30 @@ bash install.sh
 - Helps get the **Android APK** onto your TV (ADB or a LAN URL you can open from the TV)
 - Adds the **`tvclaw`** CLI under `~/.local/bin` and opens the GitHub page so you can **star** the project ⭐️
 
+## Installation
+
+### Desktop installation
+
+<video src="docs/videos/desktop-installation.mp4" controls playsinline width="100%"></video>
+
+### Mobile installation
+
+<video src="docs/videos/mobile-installation.mp4" controls playsinline width="100%"></video>
+
+## Use-cases
+
+### Netflix show
+
+<video src="docs/videos/use-case-netflix.mp4" controls playsinline width="100%"></video>
+
+### NBA summary
+
+<video src="docs/videos/use-case-nba.mp4" controls playsinline width="100%"></video>
+
+### Play games
+
+<video src="docs/videos/use-case-tetris.mp4" controls playsinline width="100%"></video>
+
 ---
 
 ## Architecture (sketch) 🗺️
