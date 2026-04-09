@@ -17,7 +17,7 @@
 ## One-line install (macOS / Linux)
 
 ```bash
-curl -fsSL -H 'Accept: application/vnd.github.raw' 'https://api.github.com/repos/TVClaw/TVClaw/contents/install.sh?ref=main' -o /tmp/tvclaw-install.sh && bash /tmp/tvclaw-install.sh
+curl -fsSL https://raw.githubusercontent.com/TVClaw/TVClaw/main/install.sh | bash
 ```
 
 Saving the script first avoids piping problems (some shells or `pipefail` settings) and makes GitHub errors visible instead of feeding JSON into Bash. You can use `| bash` instead if you prefer. `cdn.jsdelivr.net/gh/TVClaw/TVClaw@main/install.sh` can lag behind GitHub.
