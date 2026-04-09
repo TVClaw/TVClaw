@@ -46,25 +46,25 @@ bash install.sh
 
 ### Desktop installation
 
-<video src="https://raw.githubusercontent.com/TVClaw/TVClaw/main/docs/videos/desktop-installation.mp4" controls playsinline width="100%"></video>
+https://github.com/user-attachments/assets/93738469-907c-4335-becc-cb5ac66b9adb
 
 ### Mobile installation
 
-<video src="https://raw.githubusercontent.com/TVClaw/TVClaw/main/docs/videos/mobile-installation.mp4" controls playsinline width="100%"></video>
+https://github.com/user-attachments/assets/4ee66fae-c042-425f-b3e4-28930aaf2959
 
 ## Use-cases
 
 ### Netflix show
 
-<video src="https://raw.githubusercontent.com/TVClaw/TVClaw/main/docs/videos/use-case-netflix.mp4" controls playsinline width="100%"></video>
+https://github.com/user-attachments/assets/0107b399-4ca5-4f7c-99e6-cfd07b7542ef
 
 ### NBA summary
 
-<video src="https://raw.githubusercontent.com/TVClaw/TVClaw/main/docs/videos/use-case-nba.mp4" controls playsinline width="100%"></video>
+https://github.com/user-attachments/assets/3a8ad33d-cc64-49c6-8075-660cb308f2f9
 
 ### Play games
 
-<video src="https://raw.githubusercontent.com/TVClaw/TVClaw/main/docs/videos/use-case-tetris.mp4" controls playsinline width="100%"></video>
+https://github.com/user-attachments/assets/05c2013e-ee39-4eb8-a631-abc4ff583a47
 
 ---
 
